@@ -1,0 +1,2101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>NetBlox Academy - Construtor de Topologias 3D</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+    body, html {
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      font-family: 'Inter', sans-serif; background: #0f172a;
+    }
+    .font-roblox { font-family: 'Fredoka', sans-serif; }
+    #game-canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+
+    /* Animação dramática de ERRO */
+    @keyframes shakeError {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); }
+      15% { transform: translate(-54%, -48%) rotate(-2deg) scale(1.08); }
+      30% { transform: translate(-46%, -52%) rotate(2deg) scale(1.08); }
+      45% { transform: translate(-53%, -51%) rotate(-1.5deg) scale(1.05); }
+      60% { transform: translate(-47%, -49%) rotate(1.5deg) scale(1.05); }
+      75% { transform: translate(-51%, -50%) rotate(-0.5deg) scale(1.02); }
+    }
+    .animate-error-banner {
+      animation: shakeError 0.55s cubic-bezier(.36,.07,.19,.97) both;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+      50% { box-shadow: 0 0 28px rgba(59, 130, 246, 0.9); }
+    }
+    .slot-active {
+      transform: translateY(-8px) scale(1.08);
+      border-color: #38bdf8 !important;
+      background: rgba(14, 165, 233, 0.28) !important;
+      animation: pulseGlow 1.6s infinite;
+    }
+
+    /* Barra de rolagem customizada */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
+    ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.4); border-radius: 9999px; }
+  </style>
+</head>
+<body class="text-slate-100">
+
+  <!-- Canvas 3D Principal -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- HUD Superior: Fase Atual, Objetivo e Controles -->
+  <div class="fixed top-3 left-3 right-3 z-20 flex flex-wrap items-start justify-between gap-3 pointer-events-none">
+    <!-- Painel da Fase -->
+    <div class="pointer-events-auto bg-slate-900/85 backdrop-blur-md border border-slate-700/80 rounded-2xl p-3.5 shadow-2xl max-w-md w-full sm:w-auto">
+      <div class="flex items-center justify-between gap-3 mb-1">
+        <span id="level-badge" class="px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/30">
+          Fase 1 / 7
+        </span>
+        <div class="flex items-center gap-2 text-xs font-semibold text-amber-400">
+          <span>⭐ <span id="score-display">0</span> pts</span>
+        </div>
+      </div>
+      <h1 id="level-title" class="font-roblox text-lg sm:text-xl font-bold text-white leading-tight">
+        Ponto a Ponto (Cabeado)
+      </h1>
+      <p id="level-desc" class="text-xs sm:text-sm text-slate-300 mt-1 leading-snug">
+        Posicione 1 PC-PT e 1 Printer-PT e conecte-os diretamente usando Cabo de Rede.
+      </p>
+      <div class="mt-2.5 flex flex-wrap items-center gap-2">
+        <button onclick="openDiagramModal()" class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-xs font-bold text-white shadow-lg transition flex items-center gap-1.5">
+          <span>📐</span> Ver Diagrama
+        </button>
+        <button onclick="openLevelSelectModal()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-600 text-xs font-semibold text-slate-200 transition">
+          📋 Fases
+        </button>
+        <button onclick="clearWorkspace()" class="px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 active:scale-95 border border-rose-700/60 text-xs font-semibold text-rose-200 transition">
+          🗑️ Limpar Sala
+        </button>
+      </div>
+    </div>
+
+    <!-- Painel Direito: Trocar Skin, Ações de Montagem e Validação -->
+    <div class="pointer-events-auto flex flex-col items-end gap-2 ml-auto">
+      <div class="flex items-center gap-2">
+        <button onclick="openSkinModal()" class="px-3.5 py-2 rounded-2xl bg-slate-900/85 hover:bg-slate-800 backdrop-blur-md border border-slate-700 text-xs sm:text-sm font-bold text-white shadow-xl transition flex items-center gap-2 active:scale-95">
+          <span id="current-skin-avatar" class="w-5 h-5 rounded-full bg-sky-500 inline-block border border-white/50"></span>
+          <span>👕 Trocar Skin</span>
+        </button>
+        <button onclick="undoLastAction()" title="Desfazer última ação (Ctrl+Z)" class="px-3 py-2 rounded-2xl bg-slate-900/85 hover:bg-slate-800 backdrop-blur-md border border-slate-700 text-xs sm:text-sm font-bold text-slate-200 shadow-xl transition active:scale-95">
+          ↩️ Desfazer
+        </button>
+      </div>
+
+      <button onclick="validateCurrentTopology()" class="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-roblox text-sm sm:text-base font-bold shadow-xl shadow-emerald-950/60 border border-emerald-300/40 transition transform hover:scale-105 active:scale-95 flex items-center gap-2">
+        <span>✅</span> VALIDAR TOPOLOGIA
+      </button>
+
+      <!-- Dica rápida de controles -->
+      <div class="hidden md:flex items-center gap-3 bg-slate-950/75 backdrop-blur-sm border border-slate-800 rounded-xl px-3 py-1.5 text-[11px] text-slate-400">
+        <span><kbd class="px-1.5 py-0.5 bg-slate-800 rounded text-slate-200">WASD</kbd> Andar de frente</span>
+        <span><kbd class="px-1.5 py-0.5 bg-slate-800 rounded text-slate-200">1-9</kbd> Inventário</span>
+        <span><kbd class="px-1.5 py-0.5 bg-slate-800 rounded text-slate-200">Clique</kbd> Posicionar / Ligar</span>
+        <span><kbd class="px-1.5 py-0.5 bg-slate-800 rounded text-slate-200">Botão Dir.</kbd> Girar Câmera</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Banner de Status / Modo de Conexão Ativo -->
+  <div id="connection-status-pill" class="hidden fixed top-36 sm:top-24 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-amber-500/95 text-slate-950 font-bold text-xs sm:text-sm shadow-2xl border-2 border-amber-200 flex items-center gap-2">
+    <span class="animate-ping w-2.5 h-2.5 rounded-full bg-slate-900"></span>
+    <span id="connection-status-text">Selecione o segundo dispositivo para conectar...</span>
+    <button onclick="cancelPendingConnection()" class="ml-2 px-2 py-0.5 bg-slate-900 text-white rounded-full text-[11px]">Cancelar</button>
+  </div>
+
+  <!-- ALERTA DRAMÁTICO DE ERRO NA TELA -->
+  <div id="error-overlay" class="hidden fixed inset-0 z-40 pointer-events-none flex items-center justify-center bg-red-950/35 backdrop-blur-[2px]">
+    <div id="error-card" class="pointer-events-auto fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92%] max-w-lg bg-gradient-to-b from-red-600 to-rose-800 border-4 border-red-300 rounded-3xl p-6 text-center shadow-[0_0_60px_rgba(239,68,68,0.85)]">
+      <div class="text-5xl sm:text-6xl mb-2">❌</div>
+      <h2 class="font-roblox text-4xl sm:text-5xl font-extrabold text-white tracking-wider drop-shadow-md">
+        ERRO!
+      </h2>
+      <p id="error-reason" class="mt-3 text-sm sm:text-base font-semibold text-red-50 bg-black/25 rounded-2xl p-3.5 border border-red-300/30 leading-relaxed">
+        A topologia montada não corresponde ao diagrama exigido nesta fase.
+      </p>
+      <div class="mt-5 flex justify-center gap-3">
+        <button onclick="closeErrorOverlay()" class="px-6 py-2.5 rounded-2xl bg-white text-red-700 hover:bg-red-50 font-roblox font-bold text-base shadow-lg active:scale-95 transition">
+          Corrigir Montagem
+        </button>
+        <button onclick="closeErrorOverlay(); openDiagramModal();" class="px-4 py-2.5 rounded-2xl bg-red-950/80 text-white border border-red-300/40 hover:bg-red-900 font-semibold text-sm active:scale-95 transition">
+          📐 Ver Diagrama
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE SUCESSO DA FASE -->
+  <div id="success-overlay" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-950/65 backdrop-blur-sm p-4">
+    <div class="w-full max-w-md bg-gradient-to-b from-slate-900 to-slate-800 border-2 border-emerald-400 rounded-3xl p-6 text-center shadow-[0_0_50px_rgba(16,185,129,0.5)]">
+      <div class="text-5xl mb-2">🏆</div>
+      <span class="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold uppercase tracking-wider">
+        Topologia Validada com Sucesso!
+      </span>
+      <h2 id="success-title" class="font-roblox text-2xl sm:text-3xl font-bold text-white mt-2">
+        Fase Concluída!
+      </h2>
+      <p id="success-desc" class="text-sm text-slate-300 mt-2">
+        Os pacotes de dados estão trafegando perfeitamente pela rede!
+      </p>
+      <div class="my-4 py-3 px-4 rounded-2xl bg-slate-950/70 border border-slate-700 flex justify-around">
+        <div>
+          <div class="text-[11px] text-slate-400 uppercase">Recompensa</div>
+          <div class="font-roblox text-lg font-bold text-amber-400">+250 pts</div>
+        </div>
+        <div>
+          <div class="text-[11px] text-slate-400 uppercase">Status</div>
+          <div class="font-roblox text-lg font-bold text-emerald-400">100% Online</div>
+        </div>
+      </div>
+      <button id="next-level-btn" onclick="goToNextLevel()" class="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-roblox font-bold text-lg shadow-lg active:scale-95 transition">
+        Próxima Fase ➡️
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL DE SELEÇÃO DE SKIN (PERSONAGENS E ROUPAS) -->
+  <div id="skin-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4">
+    <div class="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-3xl p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+        <div>
+          <h2 class="font-roblox text-xl sm:text-2xl font-bold text-white">👕 Vestiário NetBlox — Escolha seu Avatar</h2>
+          <p class="text-xs text-slate-400">Cada técnico possui visual único, cabelo 3D, rosto expresso e uniforme profissional.</p>
+        </div>
+        <button onclick="closeSkinModal()" class="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold">✕</button>
+      </div>
+      <div id="skin-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <!-- Preenchido via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DO DIAGRAMA DE REFERÊNCIA (PACKET TRACER STYLE) -->
+  <div id="diagram-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+    <div class="w-full max-w-3xl bg-slate-900 border border-slate-700 rounded-3xl p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+        <div>
+          <span class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Manual Técnico de Topologias</span>
+          <h2 id="diagram-modal-title" class="font-roblox text-xl sm:text-2xl font-bold text-white">Diagrama de Referência</h2>
+        </div>
+        <button onclick="closeDiagramModal()" class="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold">✕</button>
+      </div>
+      <div class="bg-[#8e8e8e] rounded-2xl p-4 border-2 border-slate-600 flex items-center justify-center overflow-hidden">
+        <div id="diagram-svg-container" class="w-full max-w-2xl"></div>
+      </div>
+      <div id="diagram-checklist" class="mt-4 bg-slate-950/70 border border-slate-800 rounded-2xl p-4 text-xs sm:text-sm text-slate-200 space-y-1.5">
+        <!-- Lista de requisitos da fase -->
+      </div>
+      <div class="mt-4 flex justify-end">
+        <button onclick="closeDiagramModal()" class="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm">
+          Entendi, vamos montar!
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE SELEÇÃO DE FASES -->
+  <div id="levels-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+    <div class="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-3xl p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+        <h2 class="font-roblox text-xl sm:text-2xl font-bold text-white">🗺️ Selecionar Fase de Topologia</h2>
+        <button onclick="closeLevelSelectModal()" class="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold">✕</button>
+      </div>
+      <div id="levels-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <!-- Preenchido via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTROLES TOUCH MOBILE (Joystick Virtual) -->
+  <div id="mobile-controls" class="md:hidden fixed bottom-24 left-4 z-20 flex gap-2 opacity-85">
+    <div class="grid grid-cols-3 gap-1 w-28 h-28">
+      <div></div>
+      <button id="btn-up" class="bg-slate-800/90 active:bg-sky-500 border border-slate-600 rounded-xl flex items-center justify-center text-white font-bold">▲</button>
+      <div></div>
+      <button id="btn-left" class="bg-slate-800/90 active:bg-sky-500 border border-slate-600 rounded-xl flex items-center justify-center text-white font-bold">◀</button>
+      <button id="btn-down" class="bg-slate-800/90 active:bg-sky-500 border border-slate-600 rounded-xl flex items-center justify-center text-white font-bold">▼</button>
+      <button id="btn-right" class="bg-slate-800/90 active:bg-sky-500 border border-slate-600 rounded-xl flex items-center justify-center text-white font-bold">▶</button>
+    </div>
+  </div>
+
+  <!-- INVENTÁRIO HOTBAR ESTILO ROBLOX (SLOTS 1 A 9 NA PARTE INFERIOR) -->
+  <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-30 w-[98%] max-w-4xl">
+    <!-- Nome do item selecionado flutuando acima da hotbar -->
+    <div class="text-center mb-1.5 pointer-events-none">
+      <span id="selected-item-label" class="px-3.5 py-1 rounded-full bg-slate-950/85 backdrop-blur-md border border-slate-700 text-xs sm:text-sm font-bold text-sky-300 shadow-lg">
+        [1] PC-PT (Computador)
+      </span>
+    </div>
+
+    <!-- Barra de 9 Slots -->
+    <div id="roblox-hotbar" class="grid grid-cols-9 gap-1 sm:gap-2 bg-slate-950/85 backdrop-blur-xl p-1.5 sm:p-2 rounded-2xl border border-slate-700/90 shadow-2xl">
+      <!-- Slots 1-9 gerados dinamicamente -->
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. SISTEMA DE ÁUDIO SINTETIZADO (WEB AUDIO API - SEM URLS EXTERNAS)
+    // =========================================================================
+    const AudioFX = (() => {
+      let ctx = null;
+      function getCtx() {
+        if (!ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) ctx = new AudioContext();
+        }
+        if (ctx && ctx.state === 'suspended') ctx.resume();
+        return ctx;
+      }
+
+      function playTone(freq, type, duration, vol = 0.15, delay = 0) {
+        try {
+          const c = getCtx();
+          if (!c) return;
+          const osc = c.createOscillator();
+          const gain = c.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, c.currentTime + delay);
+          gain.gain.setValueAtTime(vol, c.currentTime + delay);
+          gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + delay + duration);
+          osc.connect(gain);
+          gain.connect(c.destination);
+          osc.start(c.currentTime + delay);
+          osc.stop(c.currentTime + delay + duration);
+        } catch (e) {}
+      }
+
+      return {
+        select: () => playTone(520, 'sine', 0.08, 0.12),
+        place: () => {
+          playTone(320, 'triangle', 0.1, 0.18);
+          playTone(480, 'sine', 0.12, 0.15, 0.05);
+        },
+        connect: () => {
+          playTone(440, 'sine', 0.1, 0.15);
+          playTone(660, 'sine', 0.15, 0.15, 0.07);
+        },
+        remove: () => playTone(220, 'sawtooth', 0.12, 0.12),
+        error: () => {
+          playTone(165, 'sawtooth', 0.25, 0.25, 0);
+          playTone(130, 'sawtooth', 0.35, 0.25, 0.15);
+        },
+        success: () => {
+          playTone(523.25, 'triangle', 0.15, 0.2, 0);
+          playTone(659.25, 'triangle', 0.15, 0.2, 0.12);
+          playTone(783.99, 'triangle', 0.18, 0.2, 0.24);
+          playTone(1046.50, 'triangle', 0.4, 0.22, 0.36);
+        }
+      };
+    })();
+
+    // =========================================================================
+    // 2. DEFINIÇÃO DAS SKINS DE PERSONAGENS (ROSTO NORMAL + ROUPAS COMPLETAS)
+    // =========================================================================
+    const CHARACTER_SKINS = [
+      {
+        id: 'lucas',
+        name: 'Técnico Jr. Lucas',
+        role: 'Especialista em Cabeamento',
+        badgeColor: '#0284c7',
+        skinTone: 0xf1c27d,
+        hairColor: 0x3b2314,
+        hairStyle: 'short',
+        eyeColor: 0x2563eb,
+        shirtColor: 0x0284c7,     // Jaqueta azul tech
+        undershirtColor: 0xf8fafc,// Camiseta branca interna
+        pantsColor: 0x1e293b,     // Calça cargo escura
+        shoeColor: 0xe2e8f0,      // Tênis branco/cinza
+        accessory: 'backpack'
+      },
+      {
+        id: 'maya',
+        name: 'Engenheira Maya',
+        role: 'Arquiteta Wireless & IoT',
+        badgeColor: '#ea580c',
+        skinTone: 0xc68642,
+        hairColor: 0x18181b,
+        hairStyle: 'ponytail',
+        eyeColor: 0x16a34a,
+        shirtColor: 0xf97316,     // Colete laranja engenharia
+        undershirtColor: 0x1e293b,// Blusa preta
+        pantsColor: 0x334155,     // Calça jeans grafite
+        shoeColor: 0xfbbf24,      // Botas amarelas
+        accessory: 'visor'
+      },
+      {
+        id: 'kai',
+        name: 'Cyber Kai',
+        role: 'Analista de Infraestrutura',
+        badgeColor: '#7c3aed',
+        skinTone: 0xffdbac,
+        hairColor: 0x4f46e5,
+        hairStyle: 'spiky',
+        eyeColor: 0x7c3aed,
+        shirtColor: 0x6d28d9,     // Moletom roxo gamer/tech
+        undershirtColor: 0x38bdf8,// Detalhe ciano
+        pantsColor: 0x0f172a,     // Calça jogger preta
+        shoeColor: 0x38bdf8,      // Tênis neon
+        accessory: 'headphones'
+      },
+      {
+        id: 'sofia',
+        name: 'Dra. Sofia',
+        role: 'Mestra em Redes Híbridas',
+        badgeColor: '#059669',
+        skinTone: 0xe0ac69,
+        hairColor: 0x7c2d12,
+        hairStyle: 'bob',
+        eyeColor: 0x0f766e,
+        shirtColor: 0xf8fafc,     // Jaleco branco de laboratório
+        undershirtColor: 0x10b981,// Camisa esmeralda
+        pantsColor: 0x1e3a8a,     // Calça social azul marinho
+        shoeColor: 0x1e293b,      // Sapato escuro
+        accessory: 'glasses'
+      }
+    ];
+
+    let currentSkinIndex = 0;
+
+    // =========================================================================
+    // 3. INVENTÁRIO HOTBAR ESTILO ROBLOX (TECLAS 1 A 9)
+    // =========================================================================
+    const INVENTORY_ITEMS = [
+      { slot: 1, id: 'pc',         name: 'PC-PT',            label: 'Computador Desktop', icon: '🖥️', category: 'device', color: '#38bdf8' },
+      { slot: 2, id: 'laptop',     name: 'Laptop-PT',        label: 'Notebook',           icon: '💻', category: 'device', color: '#60a5fa' },
+      { slot: 3, id: 'printer',    name: 'Printer-PT',       label: 'Impressora de Rede', icon: '🖨️', category: 'device', color: '#94a3b8' },
+      { slot: 4, id: 'server',     name: 'Server-PT',        label: 'Servidor Rack',      icon: '🗄️', category: 'device', color: '#818cf8' },
+      { slot: 5, id: 'mobile',     name: 'Smart/Mobile',     label: 'Smartphone / Tablet / Cafeteira', icon: '📱', category: 'device', color: '#34d399', hasSubtypes: true },
+      { slot: 6, id: 'netnode',    name: 'Switch / Hub',     label: 'Switch-PT ou Hub-PT', icon: '🔀', category: 'device', color: '#f59e0b', hasSubtypes: true },
+      { slot: 7, id: 'router',     name: 'HomeRouter-AC',    label: 'Roteador Wireless',  icon: '📡', category: 'device', color: '#2dd4bf' },
+      { slot: 8, id: 'cable',      name: 'Cabo de Rede',     label: 'Conexão Cabeada',    icon: '🔌', category: 'link',   color: '#22c55e' },
+      { slot: 9, id: 'wireless',   name: 'Sem Fio / BT',     label: 'Wi-Fi / Bluetooth',  icon: '📶', category: 'link',   color: '#a855f7' }
+    ];
+
+    // Subtipos para slots versáteis (Slot 5 e Slot 6)
+    let activeSlot = 1;
+    let mobileSubtype = 'smartphone'; // 'smartphone' | 'tablet' | 'appliance'
+    let nodeSubtype = 'switch';       // 'switch' | 'hub'
+
+    // =========================================================================
+    // 4. AS 7 FASES BASEADAS NOS DIAGRAMAS DO DOCUMENTO
+    // =========================================================================
+    const LEVELS = [
+      {
+        id: 1,
+        title: 'Ponto a Ponto (Cabeado)',
+        shortName: '1. Ponto a Ponto (Cabo)',
+        description: 'Monte a conexão direta entre 1 PC-PT e 1 Printer-PT utilizando um Cabo de Rede (Tecla 8).',
+        checklist: [
+          '1x Computador (PC-PT) — Tecla [1]',
+          '1x Impressora (Printer-PT) — Tecla [3]',
+          '1x Conexão por Cabo de Rede ligando diretamente o PC à Impressora — Tecla [8]'
+        ],
+        presetSubtypes: { mobile: 'smartphone', node: 'switch' },
+        svgDiagram: `
+          <svg viewBox="0 0 600 220" class="w-full h-auto font-sans">
+            <rect x="150" y="15" width="300" height="32" fill="#ffffff" rx="4"/>
+            <text x="300" y="37" text-anchor="middle" font-weight="bold" font-size="16" fill="#111">PONTO A PONTO (CABEADO)</text>
+            <line x1="170" y1="115" x2="430" y2="115" stroke="#111" stroke-width="5" stroke-dasharray="14,8"/>
+            <polygon points="210,103 222,123 198,123" fill="#4ade80"/>
+            <polygon points="390,103 402,123 378,123" fill="#4ade80"/>
+            <rect x="110" y="85" width="60" height="45" rx="4" fill="#2b7a9b" stroke="#164e63" stroke-width="2"/>
+            <rect x="118" y="92" width="44" height="28" fill="#bae6fd"/>
+            <rect x="105" y="134" width="70" height="8" fill="#38bdf8"/>
+            <text x="140" y="165" text-anchor="middle" font-size="14" font-weight="bold" fill="#111">PC-PT</text>
+            <text x="140" y="182" text-anchor="middle" font-size="13" fill="#111">Computer1</text>
+            <rect x="425" y="92" width="70" height="38" rx="4" fill="#2b7a9b" stroke="#164e63" stroke-width="2"/>
+            <rect x="435" y="82" width="50" height="12" fill="#7dd3fc"/>
+            <text x="460" y="165" text-anchor="middle" font-size="14" font-weight="bold" fill="#111">Printer-PT</text>
+            <text x="460" y="182" text-anchor="middle" font-size="13" fill="#111">Impressora1</text>
+          </svg>
+        `,
+        validate: (devices, links) => {
+          const pcs = devices.filter(d => d.type === 'pc');
+          const printers = devices.filter(d => d.type === 'printer');
+          if (devices.length !== 2 || pcs.length !== 1 || printers.length !== 1) {
+            return { ok: false, msg: 'Você precisa posicionar exatamente 1 PC-PT e 1 Printer-PT na sala!' };
+          }
+          if (links.length !== 1) {
+            return { ok: false, msg: 'Faça exatamente 1 ligação direta entre o PC-PT e a Printer-PT!' };
+          }
+          if (links[0].type !== 'cable') {
+            return { ok: false, msg: 'Tipo de conexão incorreto! Esta fase exige CABO DE REDE (Tecla 8), não sem fio.' };
+          }
+          return { ok: true };
+        }
+      },
+      {
+        id: 2,
+        title: 'Ponto a Ponto (Bluetooth)',
+        shortName: '2. Ponto a Ponto (Bluetooth)',
+        description: 'Conecte sem fio (Bluetooth - Tecla 9) 1 Smartphone-PT a 1 Cafeteira Smart (Appliance - Tecla 5).',
+        checklist: [
+          '1x Smartphone-PT — Tecla [5] (opção Smartphone)',
+          '1x Appliance Cafeteira Smart — Tecla [5] (opção Cafeteira)',
+          '1x Conexão Sem Fio / Bluetooth entre eles — Tecla [9]'
+        ],
+        presetSubtypes: { mobile: 'smartphone', node: 'switch' },
+        svgDiagram: `
+          <svg viewBox="0 0 600 240" class="w-full h-auto font-sans">
+            <rect x="140" y="12" width="320" height="32" fill="#ffffff" rx="4"/>
+            <text x="300" y="34" text-anchor="middle" font-weight="bold" font-size="16" fill="#111">PONTO A PONTO (BLUETOOTH)</text>
+            <line x1="215" y1="155" x2="385" y2="95" stroke="#22c55e" stroke-width="12" stroke-dasharray="4,5"/>
+            <rect x="155" y="135" width="48" height="72" rx="6" transform="rotate(-25 179 171)" fill="#0284c7" stroke="#0c4a6e" stroke-width="2"/>
+            <rect x="163" y="143" width="32" height="46" rx="2" transform="rotate(-25 179 171)" fill="#bae6fd"/>
+            <text x="175" y="222" text-anchor="middle" font-size="13" font-weight="bold" fill="#111">SMARTPHONE-PT</text>
+            <rect x="385" y="55" width="75" height="90" rx="6" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>
+            <rect x="398" y="80" width="48" height="42" rx="8" fill="#78350f"/>
+            <text x="422" y="168" text-anchor="middle" font-size="13" font-weight="bold" fill="#111">Appliance CAFETEIRA</text>
+          </svg>
+        `,
+        validate: (devices, links) => {
+          const phones = devices.filter(d => d.type === 'smartphone');
+          const coffees = devices.filter(d => d.type === 'appliance');
+          if (devices.length !== 2 || phones.length !== 1 || coffees.length !== 1) {
+            return { ok: false, msg: 'Posicione exatamente 1 Smartphone-PT e 1 Cafeteira (Appliance) usando a Tecla [5]!' };
+          }
+          if (links.length !== 1) {
+            return { ok: false, msg: 'Conecte o Smartphone diretamente à Cafeteira!' };
+          }
+          if (links[0].type !== 'wireless') {
+            return { ok: false, msg: 'Use a conexão Sem Fio / Bluetooth (Tecla 9)! Cabo não funciona em Bluetooth.' };
+          }
+          return { ok: true };
+        }
+      },
+      {
+        id: 3,
+        title: 'Topologia Estrela (Com Roteador)',
+        shortName: '3. Estrela (Roteador)',
+        description: 'Posicione 1 HomeRouter-PT-AC central. Conecte por CABO: 1 PC, 1 Laptop e 1 Printer. Conecte por WIRELESS: 1 Smartphone e 1 Tablet.',
+        checklist: [
+          '1x HomeRouter-PT-AC no centro — Tecla [7]',
+          'Cabeados ao Roteador [Tecla 8]: 1 PC-PT [1], 1 Laptop-PT [2], 1 Printer-PT [3]',
+          'Sem fio ao Roteador [Tecla 9]: 1 Smartphone-PT [5] e 1 TabletPC-PT [5]'
+        ],
+        presetSubtypes: { mobile: 'smartphone', node: 'switch' },
+        svgDiagram: `
+          <svg viewBox="0 0 640 280" class="w-full h-auto font-sans">
+            <rect x="175" y="10" width="290" height="30" fill="#ffffff" rx="4"/>
+            <text x="320" y="30" text-anchor="middle" font-weight="bold" font-size="15" fill="#111">ESTRELA (COM ROTEADOR)</text>
+            <!-- Links -->
+            <line x1="135" y1="75" x2="290" y2="75" stroke="#111" stroke-width="10" stroke-dasharray="3,4"/>
+            <line x1="350" y1="75" x2="505" y2="75" stroke="#111" stroke-width="10" stroke-dasharray="3,4"/>
+            <line x1="305" y1="90" x2="155" y2="195" stroke="#111" stroke-width="4"/>
+            <line x1="320" y1="95" x2="320" y2="195" stroke="#111" stroke-width="4"/>
+            <line x1="335" y1="90" x2="485" y2="195" stroke="#111" stroke-width="4"/>
+            <!-- Router -->
+            <ellipse cx="320" cy="75" rx="34" ry="18" fill="#0284c7" stroke="#0c4a6e" stroke-width="2"/>
+            <text x="320" y="114" text-anchor="middle" font-size="12" font-weight="bold" fill="#111">HomeRouter-PT-AC</text>
+            <!-- Wireless endpoints -->
+            <rect x="90" y="55" width="36" height="50" rx="4" fill="#38bdf8" stroke="#0369a1"/>
+            <text x="108" y="122" text-anchor="middle" font-size="11" font-weight="bold" fill="#111">Smartphone1</text>
+            <rect x="510" y="55" width="46" height="42" rx="4" fill="#38bdf8" stroke="#0369a1"/>
+            <text x="533" y="114" text-anchor="middle" font-size="11" font-weight="bold" fill="#111">Tablet PC0</text>
+            <!-- Wired endpoints -->
+            <rect x="125" y="195" width="50" height="36" fill="#0284c7"/>
+            <text x="150" y="248" text-anchor="middle" font-size="12" font-weight="bold" fill="#111">PC1 (Cabo)</text>
+            <rect x="295" y="195" width="50" height="34" fill="#0284c7"/>
+            <text x="320" y="248" text-anchor="middle" font-size="12" font-weight="bold" fill="#111">Laptop0 (Cabo)</text>
+            <rect x="460" y="195" width="54" height="32" fill="#0284c7"/>
+            <text x="487" y="248" text-anchor="middle" font-size="12" font-weight="bold" fill="#111">Printer1 (Cabo)</text>
+          </svg>
+        `,
+        validate: (devices, links) => {
+          const routers = devices.filter(d => d.type === 'router');
+          if (routers.length !== 1) return { ok: false, msg: 'A Topologia Estrela precisa de exatamente 1 HomeRouter-PT-AC (Tecla 7) no centro!' };
+          const router = routers[0];
+          const requiredTypes = ['pc', 'laptop', 'printer', 'smartphone', 'tablet'];
+          if (devices.length !== 6) {
+            return { ok: false, msg: 'Devem existir 6 dispositivos no total: 1 Roteador + PC, Laptop, Printer, Smartphone e Tablet.' };
+          }
+          for (const t of requiredTypes) {
+            if (devices.filter(d => d.type === t).length !== 1) {
+              return { ok: false, msg: `Falta ou há excesso de equipamento do tipo: ${t.toUpperCase()}.` };
+            }
+          }
+          if (links.length !== 5) return { ok: false, msg: 'Todos os 5 dispositivos finais devem estar conectados diretamente ao Roteador!' };
+          for (const d of devices) {
+            if (d.id === router.id) continue;
+            const link = links.find(l => (l.from === router.id && l.to === d.id) || (l.to === router.id && l.from === d.id));
+            if (!link) return { ok: false, msg: `O dispositivo ${d.label} não está ligado ao Roteador central!` };
+            const shouldBeWireless = (d.type === 'smartphone' || d.type === 'tablet');
+            if (shouldBeWireless && link.type !== 'wireless') {
+              return { ok: false, msg: `${d.label} deve ser conectado via WIRELESS (Tecla 9), conforme o diagrama!` };
+            }
+            if (!shouldBeWireless && link.type !== 'cable') {
+              return { ok: false, msg: `${d.label} deve ser conectado via CABO DE REDE (Tecla 8), conforme o diagrama!` };
+            }
+          }
+          return { ok: true };
+        }
+      },
+      {
+        id: 4,
+        title: 'Topologia Barramento (Com Hubs)',
+        shortName: '4. Barramento (Hubs)',
+        description: 'Crie um barramento com 5 Hubs em linha interligados por cabos, e conecte 1 dispositivo final abaixo de cada Hub (Laptop, PC, Printer, PC, Laptop).',
+        checklist: [
+          '5x Hub-PT em sequência linear (Hub1 — Hub2 — Hub3 — Hub4 — Hub5) — Tecla [6] (opção Hub)',
+          '4x Cabos interligando os 5 Hubs em série — Tecla [8]',
+          '5x Dispositivos conectados por cabo aos Hubs: 2 Laptops [2], 2 PCs [1] e 1 Printer [3]'
+        ],
+        presetSubtypes: { mobile: 'smartphone', node: 'hub' },
+        svgDiagram: `
+          <svg viewBox="0 0 660 250" class="w-full h-auto font-sans">
+            <rect x="185" y="8" width="290" height="28" fill="#ffffff" rx="4"/>
+            <text x="330" y="27" text-anchor="middle" font-weight="bold" font-size="14" fill="#111">BARRAMENTO (COM HUBS)</text>
+            <rect x="65" y="45" width="530" height="82" fill="#f472b6" stroke="#111" stroke-width="1.5"/>
+            <line x1="115" y1="80" x2="545" y2="80" stroke="#111" stroke-width="4" stroke-dasharray="10,6"/>
+            <!-- 5 Hubs & Drops -->
+            <g fill="#0284c7" stroke="#0c4a6e">
+              <rect x="98" y="62" width="34" height="36"/><line x1="115" y1="98" x2="90" y2="175" stroke="#111" stroke-width="3"/>
+              <rect x="205" y="62" width="34" height="36"/><line x1="222" y1="98" x2="210" y2="175" stroke="#111" stroke-width="3"/>
+              <rect x="313" y="62" width="34" height="36"/><line x1="330" y1="98" x2="330" y2="175" stroke="#111" stroke-width="3"/>
+              <rect x="420" y="62" width="34" height="36"/><line x1="437" y1="98" x2="450" y2="175" stroke="#111" stroke-width="3"/>
+              <rect x="528" y="62" width="34" height="36"/><line x1="545" y1="98" x2="570" y2="175" stroke="#111" stroke-width="3"/>
+            </g>
+            <text x="90" y="205" text-anchor="middle" font-size="12" font-weight="bold" fill="#111">Laptop2</text>
+            <text x="210" y="205" text-anchor="middle" font-size="12" font-weight="bold" fill="#111">PC1</text>
+            <text x="330" y="205" text-anchor="middle" font-size="12" font-weight="bold" fill="#111">Printer1</text>
+            <text x="450" y="205" text-anchor="middle" font-size="12" font-weight="bold" fill="#111">PC2</text>
+            <text x="570" y="205" text-anchor="middle" font-size="12" font-weight="bold" fill="#111">Laptop1</text>
+          </svg>
+        `,
+        validate: (devices, links) => {
+          const hubs = devices.filter(d => d.type === 'hub');
+          const laptops = devices.filter(d => d.type === 'laptop');
+          const pcs = devices.filter(d => d.type === 'pc');
+          const printers = devices.filter(d => d.type === 'printer');
+          if (hubs.length !== 5) return { ok: false, msg: 'Posicione exatamente 5 Hubs (Tecla 6 -> Hub-PT) formando o barramento!' };
+          if (laptops.length !== 2 || pcs.length !== 2 || printers.length !== 1 || devices.length !== 10) {
+            return { ok: false, msg: 'Abaixo dos 5 Hubs devem existir: 2 Laptops, 2 PCs e 1 Impressora (total de 10 dispositivos).' };
+          }
+          if (links.some(l => l.type !== 'cable')) {
+            return { ok: false, msg: 'Todas as conexões do Barramento devem ser feitas com CABO DE REDE (Tecla 8)!' };
+          }
+          // Verifica se os 5 hubs formam um caminho linear (grafo conectado de 4 arestas entre hubs, grau max 2)
+          const hubIds = new Set(hubs.map(h => h.id));
+          const hubLinks = links.filter(l => hubIds.has(l.from) && hubIds.has(l.to));
+          if (hubLinks.length !== 4) {
+            return { ok: false, msg: 'Interligue os 5 Hubs em linha reta (4 cabos entre os Hubs, sem fechar anel)!' };
+          }
+          const adj = {};
+          hubs.forEach(h => adj[h.id] = []);
+          hubLinks.forEach(l => { adj[l.from].push(l.to); adj[l.to].push(l.from); });
+          if (Object.values(adj).some(neighbors => neighbors.length > 2)) {
+            return { ok: false, msg: 'Os Hubs devem estar ligados em série (barramento linear), não em estrela!' };
+          }
+          // Verifica se cada hub possui exatamente 1 dispositivo final conectado
+          for (const h of hubs) {
+            const hostLinks = links.filter(l =>
+              (l.from === h.id && !hubIds.has(l.to)) || (l.to === h.id && !hubIds.has(l.from))
+            );
+            if (hostLinks.length !== 1) {
+              return { ok: false, msg: 'Cada um dos 5 Hubs deve ter exatamente 1 computador/impressora conectado a ele!' };
+            }
+          }
+          return { ok: true };
+        }
+      },
+      {
+        id: 5,
+        title: 'Topologia Anel (Com Switches)',
+        shortName: '5. Anel (Switches)',
+        description: 'Posicione 5 Switches formando um círculo/anel fechado por cabos e conecte 1 host final em cada Switch (2 PCs, 1 Laptop, 1 Printer, 1 Server).',
+        checklist: [
+          '5x Switch-PT em círculo fechado (5 cabos formando o anel) — Tecla [6] (opção Switch)',
+          '5x Dispositivos finais (1 por Switch): 2 PCs [1], 1 Laptop [2], 1 Printer [3], 1 Server [4]',
+          'Todas as ligações via Cabo de Rede — Tecla [8]'
+        ],
+        presetSubtypes: { mobile: 'smartphone', node: 'switch' },
+        svgDiagram: `
+          <svg viewBox="0 0 600 300" class="w-full h-auto font-sans">
+            <rect x="195" y="10" width="210" height="28" fill="#ffffff" rx="4"/>
+            <text x="300" y="29" text-anchor="middle" font-weight="bold" font-size="14" fill="#111">ANEL (COM SWITCHES)</text>
+            <!-- Pentágono Anel -->
+            <polygon points="220,85 380,85 430,175 300,235 170,175" fill="none" stroke="#111" stroke-width="4" stroke-dasharray="10,6"/>
+            <!-- Links externos -->
+            <line x1="220" y1="85" x2="150" y2="45" stroke="#111" stroke-width="3"/>
+            <line x1="380" y1="85" x2="450" y2="45" stroke="#111" stroke-width="3"/>
+            <line x1="430" y1="175" x2="515" y2="175" stroke="#111" stroke-width="3"/>
+            <line x1="300" y1="235" x2="300" y2="275" stroke="#111" stroke-width="3"/>
+            <line x1="170" y1="175" x2="85" y2="175" stroke="#111" stroke-width="3"/>
+            <!-- Switches -->
+            <g fill="#0284c7" stroke="#0c4a6e">
+              <rect x="200" y="73" width="40" height="22"/><rect x="360" y="73" width="40" height="22"/>
+              <rect x="410" y="164" width="40" height="22"/><rect x="280" y="224" width="40" height="22"/>
+              <rect x="150" y="164" width="40" height="22"/>
+            </g>
+            <text x="120" y="42" font-size="11" font-weight="bold" fill="#111">PC1</text>
+            <text x="458" y="42" font-size="11" font-weight="bold" fill="#111">Impressora1</text>
+            <text x="522" y="179" font-size="11" font-weight="bold" fill="#111">Servidor1</text>
+            <text x="300" y="292" text-anchor="middle" font-size="11" font-weight="bold" fill="#111">Notebook1</text>
+            <text x="35" y="179" font-size="11" font-weight="bold" fill="#111">PC2</text>
+          </svg>
+        `,
+        validate: (devices, links) => {
+          const switches = devices.filter(d => d.type === 'switch');
+          const pcs = devices.filter(d => d.type === 'pc');
+          const laptops = devices.filter(d => d.type === 'laptop');
+          const printers = devices.filter(d => d.type === 'printer');
+          const servers = devices.filter(d => d.type === 'server');
+
+          if (switches.length !== 5) return { ok: false, msg: 'Posicione exatamente 5 Switches (Tecla 6 -> Switch-PT)!' };
+          if (pcs.length !== 2 || laptops.length !== 1 || printers.length !== 1 || servers.length !== 1 || devices.length !== 10) {
+            return { ok: false, msg: 'Conecte 1 dispositivo em cada Switch: 2 PCs, 1 Laptop, 1 Printer e 1 Server (10 itens no total).' };
+          }
+          if (links.some(l => l.type !== 'cable')) return { ok: false, msg: 'Use apenas Cabos de Rede (Tecla 8) nesta topologia!' };
+
+          const swIds = new Set(switches.map(s => s.id));
+          const swLinks = links.filter(l => swIds.has(l.from) && swIds.has(l.to));
+          if (swLinks.length !== 5) return { ok: false, msg: 'Para formar um ANEL fechado com 5 Switches, são necessários exatamente 5 cabos interligando-os!' };
+
+          const deg = {};
+          switches.forEach(s => deg[s.id] = 0);
+          swLinks.forEach(l => { deg[l.from]++; deg[l.to]++; });
+          if (Object.values(deg).some(d => d !== 2)) {
+            return { ok: false, msg: 'Cada Switch do Anel deve estar conectado a exatamente 2 outros Switches formando um ciclo!' };
+          }
+          for (const s of switches) {
+            const hostLinks = links.filter(l => (l.from === s.id && !swIds.has(l.to)) || (l.to === s.id && !swIds.has(l.from)));
+            if (hostLinks.length !== 1) return { ok: false, msg: 'Cada Switch do anel deve ter 1 dispositivo final conectado a ele!' };
+          }
+          return { ok: true };
+        }
+      },
+      {
+        id: 6,
+        title: 'Topologia Malha (Com Switches)',
+        shortName: '6. Malha (Switches)',
+        description: 'Evolua o anel para uma Topologia Malha (Mesh): interligue os 5 Switches entre si com enlaces redundantes cruzados (mínimo 8 cabos entre Switches) + os 5 hosts finais!',
+        checklist: [
+          '5x Switch-PT totalmente/altamente interconectados entre si (malha redundante com ligações cruzadas)',
+          '5x Dispositivos finais (1 por Switch): 2 PCs [1], 1 Laptop [2], 1 Printer [3], 1 Server [4]',
+          'Dica: Conecte cada Switch aos demais (10 cabos internos para Malha Completa)'
+        ],
+        presetSubtypes: { mobile: 'smartphone', node: 'switch' },
+        svgDiagram: `
+          <svg viewBox="0 0 600 300" class="w-full h-auto font-sans">
+            <rect x="190" y="10" width="220" height="28" fill="#ffffff" rx="4"/>
+            <text x="300" y="29" text-anchor="middle" font-weight="bold" font-size="14" fill="#111">MALHA (COM SWITCHES)</text>
+            <!-- Malha Completa K5 -->
+            <g stroke="#111" stroke-width="3" stroke-dasharray="8,5">
+              <line x1="220" y1="85" x2="380" y2="85"/>
+              <line x1="380" y1="85" x2="430" y2="175"/>
+              <line x1="430" y1="175" x2="300" y2="235"/>
+              <line x1="300" y1="235" x2="170" y2="175"/>
+              <line x1="170" y1="175" x2="220" y2="85"/>
+              <!-- Diagonais cruzadas -->
+              <line x1="220" y1="85" x2="430" y2="175"/>
+              <line x1="220" y1="85" x2="300" y2="235"/>
+              <line x1="380" y1="85" x2="300" y2="235"/>
+              <line x1="380" y1="85" x2="170" y2="175"/>
+              <line x1="170" y1="175" x2="430" y2="175"/>
+            </g>
+            <!-- Hosts -->
+            <line x1="220" y1="85" x2="150" y2="45" stroke="#111" stroke-width="3"/>
+            <line x1="380" y1="85" x2="450" y2="45" stroke="#111" stroke-width="3"/>
+            <line x1="430" y1="175" x2="515" y2="175" stroke="#111" stroke-width="3"/>
+            <line x1="300" y1="235" x2="300" y2="275" stroke="#111" stroke-width="3"/>
+            <line x1="170" y1="175" x2="85" y2="175" stroke="#111" stroke-width="3"/>
+            <g fill="#0284c7" stroke="#0c4a6e">
+              <rect x="200" y="73" width="40" height="22"/><rect x="360" y="73" width="40" height="22"/>
+              <rect x="410" y="164" width="40" height="22"/><rect x="280" y="224" width="40" height="22"/>
+              <rect x="150" y="164" width="40" height="22"/>
+            </g>
+            <text x="120" y="42" font-size="11" font-weight="bold" fill="#111">PC1</text>
+            <text x="458" y="42" font-size="11" font-weight="bold" fill="#111">Impressora1</text>
+            <text x="522" y="179" font-size="11" font-weight="bold" fill="#111">Servidor1</text>
+            <text x="300" y="292" text-anchor="middle" font-size="11" font-weight="bold" fill="#111">Notebook1</text>
+            <text x="35" y="179" font-size="11" font-weight="bold" fill="#111">PC2</text>
+          </svg>
+        `,
+        validate: (devices, links) => {
+          const switches = devices.filter(d => d.type === 'switch');
+          const pcs = devices.filter(d => d.type === 'pc');
+          const laptops = devices.filter(d => d.type === 'laptop');
+          const printers = devices.filter(d => d.type === 'printer');
+          const servers = devices.filter(d => d.type === 'server');
+
+          if (switches.length !== 5) return { ok: false, msg: 'Posicione exatamente 5 Switches (Tecla 6 -> Switch-PT)!' };
+          if (pcs.length !== 2 || laptops.length !== 1 || printers.length !== 1 || servers.length !== 1 || devices.length !== 10) {
+            return { ok: false, msg: 'Conecte 1 dispositivo final em cada Switch: 2 PCs, 1 Laptop, 1 Printer e 1 Server.' };
+          }
+          if (links.some(l => l.type !== 'cable')) return { ok: false, msg: 'Use apenas Cabos de Rede (Tecla 8) nesta topologia!' };
+
+          const swIds = new Set(switches.map(s => s.id));
+          const swLinks = links.filter(l => swIds.has(l.from) && swIds.has(l.to));
+          if (swLinks.length < 8) {
+            return { ok: false, msg: `Faltam enlaces redundantes! Você ligou ${swLinks.length} cabos entre Switches; a Malha exige pelo menos 8 (ideal: 10 cabos interligando todos entre si).` };
+          }
+          const deg = {};
+          switches.forEach(s => deg[s.id] = 0);
+          swLinks.forEach(l => { deg[l.from]++; deg[l.to]++; });
+          if (Object.values(deg).some(d => d < 3)) {
+            return { ok: false, msg: 'Cada Switch na topologia Malha deve ter no mínimo 3 conexões com outros Switches!' };
+          }
+          for (const s of switches) {
+            const hostLinks = links.filter(l => (l.from === s.id && !swIds.has(l.to)) || (l.to === s.id && !swIds.has(l.from)));
+            if (hostLinks.length !== 1) return { ok: false, msg: 'Cada Switch deve possuir 1 dispositivo final conectado a ele!' };
+          }
+          return { ok: true };
+        }
+      },
+      {
+        id: 7,
+        title: 'Rede Tipo Árvore (Híbrida - Desafio Final)',
+        shortName: '7. Rede Tipo Árvore (Final)',
+        description: 'Monte a Arquitetura Árvore unindo um Barramento principal de 4 Hubs a 4 sub-redes: (1) Ponto-a-Ponto com Server, (2) Estrela com Roteador + PC/Laptop/Printer, (3) Roteador + Sub-rede Anel (3 Switches), (4) Roteador + Sub-rede Malha (4 Switches).',
+        checklist: [
+          'Backbone Barramento: 4 Hubs em linha conectados por cabo — Tecla [6]',
+          'Ramo 1 (Ponto-a-Ponto): Hub1 conectado a 1 Server-PT [4]',
+          'Ramo 2 (Estrela): Hub2 -> HomeRouter [7] -> 1 PC [1], 1 Laptop [2], 1 Printer [3]',
+          'Ramo 3 (Anel): Hub3 -> HomeRouter [7] -> 3 Switches [6] em ciclo fechado',
+          'Ramo 4 (Malha): Hub4 -> HomeRouter [7] -> 4 Switches [6] totalmente interligados (6 cabos entre si)'
+        ],
+        presetSubtypes: { mobile: 'smartphone', node: 'hub' },
+        svgDiagram: `
+          <svg viewBox="0 0 700 320" class="w-full h-auto font-sans">
+            <rect x="200" y="6" width="300" height="26" fill="#ffffff" rx="4"/>
+            <text x="350" y="24" text-anchor="middle" font-weight="bold" font-size="14" fill="#111">REDE TIPO ÁRVORE (HÍBRIDA)</text>
+            <!-- Barramento Roxo -->
+            <rect x="40" y="42" width="360" height="52" fill="#a855f7" stroke="#111"/>
+            <line x1="80" y1="68" x2="360" y2="68" stroke="#111" stroke-width="4"/>
+            <g fill="#0284c7" stroke="#111">
+              <rect x="68" y="55" width="24" height="26"/><rect x="160" y="55" width="24" height="26"/>
+              <rect x="252" y="55" width="24" height="26"/><rect x="345" y="55" width="24" height="26"/>
+            </g>
+            <!-- Subrede Ponto a Ponto -->
+            <ellipse cx="80" cy="145" rx="38" ry="52" fill="#facc15" opacity="0.8"/>
+            <line x1="80" y1="81" x2="80" y2="145" stroke="#111" stroke-width="3"/>
+            <rect x="65" y="145" width="30" height="36" fill="#0284c7"/>
+            <text x="80" y="195" text-anchor="middle" font-size="10" font-weight="bold" fill="#111">Ponto-a-Ponto</text>
+            <!-- Subrede Estrela -->
+            <circle cx="172" cy="215" r="58" fill="#ec4899" opacity="0.8"/>
+            <line x1="172" y1="81" x2="172" y2="175" stroke="#111" stroke-width="3"/>
+            <ellipse cx="172" cy="180" rx="20" ry="11" fill="#0284c7"/>
+            <line x1="172" y1="191" x2="140" y2="230" stroke="#111" stroke-width="2"/>
+            <line x1="172" y1="191" x2="172" y2="235" stroke="#111" stroke-width="2"/>
+            <line x1="172" y1="191" x2="205" y2="230" stroke="#111" stroke-width="2"/>
+            <text x="172" y="262" text-anchor="middle" font-size="10" font-weight="bold" fill="#111">Estrela</text>
+            <!-- Subrede Anel -->
+            <circle cx="290" cy="235" r="65" fill="#34d399" opacity="0.85"/>
+            <line x1="264" y1="81" x2="264" y2="145" stroke="#111" stroke-width="3"/>
+            <ellipse cx="264" cy="150" rx="20" ry="11" fill="#0284c7"/>
+            <line x1="264" y1="161" x2="275" y2="195" stroke="#111" stroke-width="2"/>
+            <polygon points="275,195 320,215 270,255" fill="none" stroke="#111" stroke-width="2.5"/>
+            <text x="290" y="285" text-anchor="middle" font-size="10" font-weight="bold" fill="#111">Anel (3 Switches)</text>
+            <!-- Subrede Malha -->
+            <circle cx="535" cy="185" r="110" fill="#22d3ee" opacity="0.85"/>
+            <line x1="357" y1="81" x2="357" y2="135" stroke="#111" stroke-width="3"/>
+            <ellipse cx="357" cy="140" rx="20" ry="11" fill="#0284c7"/>
+            <line x1="377" y1="140" x2="475" y2="155" stroke="#111" stroke-width="2.5"/>
+            <rect x="475" y="140" width="110" height="85" fill="none" stroke="#111" stroke-width="2.5"/>
+            <line x1="475" y1="140" x2="585" y2="225" stroke="#111" stroke-width="2.5"/>
+            <line x1="585" y1="140" x2="475" y2="225" stroke="#111" stroke-width="2.5"/>
+            <text x="535" y="265" text-anchor="middle" font-size="11" font-weight="bold" fill="#111">Malha (4 Switches)</text>
+          </svg>
+        `,
+        validate: (devices, links) => {
+          const hubs = devices.filter(d => d.type === 'hub');
+          const routers = devices.filter(d => d.type === 'router');
+          const switches = devices.filter(d => d.type === 'switch');
+          const servers = devices.filter(d => d.type === 'server');
+          const pcs = devices.filter(d => d.type === 'pc');
+          const laptops = devices.filter(d => d.type === 'laptop');
+          const printers = devices.filter(d => d.type === 'printer');
+
+          if (hubs.length !== 4) return { ok: false, msg: 'O tronco principal da Árvore precisa de 4 Hubs em Barramento!' };
+          if (routers.length !== 3) return { ok: false, msg: 'São necessários 3 Roteadores (HomeRouter-AC) ligados aos Hubs para derivar Estrela, Anel e Malha!' };
+          if (servers.length < 1 || pcs.length < 1 || laptops.length < 1 || printers.length < 1) {
+            return { ok: false, msg: 'Inclua o Server (Ponto-a-Ponto) e PC, Laptop e Printer (na sub-rede Estrela)!' };
+          }
+          if (switches.length !== 7) {
+            return { ok: false, msg: 'Posicione 7 Switches no total: 3 para a sub-rede Anel + 4 para a sub-rede Malha!' };
+          }
+
+          // Verifica barramento de 4 hubs
+          const hubIds = new Set(hubs.map(h => h.id));
+          const hubLinks = links.filter(l => hubIds.has(l.from) && hubIds.has(l.to));
+          if (hubLinks.length !== 3) return { ok: false, msg: 'Interligue os 4 Hubs em linha reta (3 cabos entre os Hubs).' };
+
+          // Verifica conexão dos 3 roteadores aos hubs
+          const routerIds = new Set(routers.map(r => r.id));
+          const hubToRouter = links.filter(l =>
+            (hubIds.has(l.from) && routerIds.has(l.to)) || (hubIds.has(l.to) && routerIds.has(l.from))
+          );
+          if (hubToRouter.length !== 3) return { ok: false, msg: 'Conecte cada um dos 3 Roteadores a um Hub diferente do barramento!' };
+
+          // Verifica conexão do Server a um Hub (Ponto a Ponto)
+          const serverIds = new Set(servers.map(s => s.id));
+          const hubToServer = links.filter(l =>
+            (hubIds.has(l.from) && serverIds.has(l.to)) || (hubIds.has(l.to) && serverIds.has(l.from))
+          );
+          if (hubToServer.length < 1) return { ok: false, msg: 'Conecte o Server-PT diretamente ao Hub1 formando o ramo Ponto-a-Ponto!' };
+
+          // Verifica sub-rede Estrela (um roteador ligado a PC, Laptop e Printer)
+          const starRouter = routers.find(r => {
+            const neighbors = links.filter(l => l.from === r.id || l.to === r.id)
+              .map(l => devices.find(d => d.id === (l.from === r.id ? l.to : l.from)));
+            const types = neighbors.map(n => n?.type);
+            return types.includes('pc') && types.includes('laptop') && types.includes('printer');
+          });
+          if (!starRouter) return { ok: false, msg: 'Um dos Roteadores deve formar a sub-rede ESTRELA conectado a PC, Laptop e Printer!' };
+
+          // Verifica componentes conectados dos Switches (espera-se 1 componente de 3 switches em anel e 1 componente de 4 switches em malha)
+          const swIds = new Set(switches.map(s => s.id));
+          const swLinks = links.filter(l => swIds.has(l.from) && swIds.has(l.to));
+          if (swLinks.length < 9) {
+            return { ok: false, msg: 'Verifique as ligações dos Switches: o Anel (3 Switches = 3 cabos) + Malha (4 Switches = 6 cabos) somam 9 cabos!' };
+          }
+          return { ok: true };
+        }
+      }
+    ];
+
+    // =========================================================================
+    // 5. ESTADO DO JOGO E CENA 3D THREE.JS
+    // =========================================================================
+    let currentLevelIdx = 0;
+    let score = 0;
+    let placedDevices = []; // { id, type, label, position: {x,y,z}, mesh }
+    let placedLinks = [];   // { id, from, to, type: 'cable'|'wireless', mesh, packets: [] }
+    let actionHistory = []; // para Desfazer
+    let pendingLinkFromId = null;
+
+    // Three.js Core
+    let scene, camera, renderer, raycaster, mouse;
+    let floorPlane, placementGhost, highlightRing;
+    let playerGroup, playerParts = {}, heldItemMesh = null;
+    let cameraYaw = 0, cameraPitch = 0.42, cameraDistance = 11.5;
+    let isRightDragging = false, lastMouseX = 0, lastMouseY = 0;
+    let screenShakeTimer = 0;
+
+    // Movimentação do jogador
+    const keys = {};
+    const touchMove = { up: false, down: false, left: false, right: false };
+    const playerPos = new THREE.Vector3(0, 0, 5.5);
+    let playerFacingAngle = Math.PI; // Começa olhando para o centro da sala
+    let walkCycle = 0;
+
+    // =========================================================================
+    // 6. INICIALIZAÇÃO DO MUNDO 3D PROFISSIONAL
+    // =========================================================================
+    function init3D() {
+      const canvas = document.getElementById('game-canvas');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0f172a);
+      scene.fog = new THREE.FogExp2(0x0f172a, 0.018);
+
+      camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 150);
+
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+
+      setupLights();
+      buildEnvironment();
+      buildPlayerAvatar(CHARACTER_SKINS[currentSkinIndex]);
+      buildPlacementGhost();
+
+      setupInputs();
+      renderHotbar();
+      loadLevel(0);
+
+      window.addEventListener('resize', onWindowResize);
+      animate();
+    }
+
+    function setupLights() {
+      const hemi = new THREE.HemisphereLight(0xe0f2fe, 0x1e293b, 0.85);
+      scene.add(hemi);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.95);
+      dirLight.position.set(12, 22, 14);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 2048;
+      dirLight.shadow.mapSize.height = 2048;
+      dirLight.shadow.camera.near = 2;
+      dirLight.shadow.camera.far = 55;
+      const d = 18;
+      dirLight.shadow.camera.left = -d;
+      dirLight.shadow.camera.right = d;
+      dirLight.shadow.camera.top = d;
+      dirLight.shadow.camera.bottom = -d;
+      scene.add(dirLight);
+
+      // Luzes de destaque azuladas do Data Center
+      const rimLight = new THREE.PointLight(0x38bdf8, 0.6, 35);
+      rimLight.position.set(-12, 8, -12);
+      scene.add(rimLight);
+    }
+
+    function buildEnvironment() {
+      // Piso principal da arena de montagem (estilo Roblox Studio Baseplate moderno)
+      const floorGeo = new THREE.BoxGeometry(30, 0.6, 26);
+      const floorMat = new THREE.MeshStandardMaterial({
+        color: 0x334155,
+        roughness: 0.55,
+        metalness: 0.15
+      });
+      floorPlane = new THREE.Mesh(floorGeo, floorMat);
+      floorPlane.position.y = -0.3;
+      floorPlane.receiveShadow = true;
+      floorPlane.name = 'workspace_floor';
+      scene.add(floorPlane);
+
+      // Grid quadriculado estilo Roblox Studio para alinhamento preciso
+      const gridHelper = new THREE.GridHelper(26, 26, 0x38bdf8, 0x475569);
+      gridHelper.position.y = 0.01;
+      scene.add(gridHelper);
+
+      // Moldura luminosa ao redor da bancada de montagem
+      const borderMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, emissive: 0x0369a1, emissiveIntensity: 0.4 });
+      const frontBorder = new THREE.Mesh(new THREE.BoxGeometry(30.4, 0.7, 0.4), borderMat);
+      frontBorder.position.set(0, -0.25, 13.1);
+      scene.add(frontBorder);
+
+      const backBorder = frontBorder.clone();
+      backBorder.position.set(0, -0.25, -13.1);
+      scene.add(backBorder);
+
+      // Racks de Servidores decorativos no fundo da sala (ambiente Data Center)
+      const rackMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.7, roughness: 0.3 });
+      const ledMat = new THREE.MeshBasicMaterial({ color: 0x22c55e });
+      for (let i = -10; i <= 10; i += 5) {
+        const rack = new THREE.Mesh(new THREE.BoxGeometry(2.2, 5.2, 1.4), rackMat);
+        rack.position.set(i, 2.6, -14.5);
+        rack.castShadow = true;
+        scene.add(rack);
+
+        for (let l = 1; l <= 4; l++) {
+          const led = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 0.05), ledMat);
+          led.position.set(i, l * 1.0, -13.78);
+          scene.add(led);
+        }
+      }
+    }
+
+    // =========================================================================
+    // 7. CONSTRUÇÃO DO PERSONAGEM 3D ESTILO ROBLOX COM ROSTO HUMANO NORMAL E ROUPAS
+    // =========================================================================
+    function createHumanFaceTexture(skinHex, eyeHex) {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 256;
+      const ctx = c.getContext('2d');
+
+      // Fundo da pele
+      const skinColor = '#' + skinHex.toString(16).padStart(6, '0');
+      const eyeColor = '#' + eyeHex.toString(16).padStart(6, '0');
+      ctx.fillStyle = skinColor;
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Leve rubor natural nas bochechas
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.14)';
+      ctx.beginPath();
+      ctx.ellipse(68, 152, 22, 13, 0, 0, Math.PI * 2);
+      ctx.ellipse(188, 152, 22, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Sobrancelhas naturais expressivas
+      ctx.strokeStyle = '#291d16';
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(58, 92);
+      ctx.quadraticCurveTo(82, 82, 104, 90);
+      ctx.moveTo(152, 90);
+      ctx.quadraticCurveTo(174, 82, 198, 92);
+      ctx.stroke();
+
+      // Olhos humanos detalhados (esclera branca, íris colorida, pupila e brilho)
+      function drawEye(cx, cy) {
+        // Esclera
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 20, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // Íris
+        ctx.fillStyle = eyeColor;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 10.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pupila
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ponto de luz nos olhos (dá vida e naturalidade)
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(cx - 3.5, cy - 3.5, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      drawEye(82, 118);
+      drawEye(174, 118);
+
+      // Nariz sutil e natural
+      ctx.strokeStyle = 'rgba(120, 72, 42, 0.45)';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(128, 122);
+      ctx.lineTo(124, 145);
+      ctx.lineTo(133, 148);
+      ctx.stroke();
+
+      // Sorriso amigável e natural
+      ctx.strokeStyle = '#7c2d12';
+      ctx.lineWidth = 5.5;
+      ctx.beginPath();
+      ctx.arc(128, 166, 26, 0.18 * Math.PI, 0.82 * Math.PI);
+      ctx.stroke();
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.needsUpdate = true;
+      return tex;
+    }
+
+    function createOutfitTorsoTexture(skinData) {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 256;
+      const ctx = c.getContext('2d');
+
+      const mainHex = '#' + skinData.shirtColor.toString(16).padStart(6, '0');
+      const underHex = '#' + skinData.undershirtColor.toString(16).padStart(6, '0');
+
+      // Jaqueta / Colete
+      ctx.fillStyle = mainHex;
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Camiseta interna em V
+      ctx.fillStyle = underHex;
+      ctx.beginPath();
+      ctx.moveTo(78, 0);
+      ctx.lineTo(178, 0);
+      ctx.lineTo(155, 256);
+      ctx.lineTo(101, 256);
+      ctx.closePath();
+      ctx.fill();
+
+      // Zíper / Gola
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(4, 4, 248, 248);
+
+      // Crachá técnico de Redes no peito
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(168, 56, 48, 62);
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(168, 56, 48, 16);
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(176, 82, 32, 6);
+      ctx.fillRect(176, 94, 24, 6);
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.needsUpdate = true;
+      return tex;
+    }
+
+    function buildPlayerAvatar(skin) {
+      if (playerGroup) scene.remove(playerGroup);
+      playerGroup = new THREE.Group();
+      playerGroup.position.copy(playerPos);
+
+      const skinMat = new THREE.MeshStandardMaterial({ color: skin.skinTone, roughness: 0.6 });
+      const shirtMat = new THREE.MeshStandardMaterial({ color: skin.shirtColor, roughness: 0.5 });
+      const pantsMat = new THREE.MeshStandardMaterial({ color: skin.pantsColor, roughness: 0.7 });
+      const shoeMat = new THREE.MeshStandardMaterial({ color: skin.shoeColor, roughness: 0.4 });
+      const hairMat = new THREE.MeshStandardMaterial({ color: skin.hairColor, roughness: 0.65 });
+
+      // 1. PERNAS (Articuladas no quadril + Tênis)
+      const leftLegGroup = new THREE.Group();
+      leftLegGroup.position.set(-0.24, 0.95, 0);
+      const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.78, 0.44), pantsMat);
+      leftLeg.position.y = -0.39;
+      leftLeg.castShadow = true;
+      const leftShoe = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.2, 0.54), shoeMat);
+      leftShoe.position.set(0, -0.85, 0.04);
+      leftShoe.castShadow = true;
+      leftLegGroup.add(leftLeg, leftShoe);
+
+      const rightLegGroup = new THREE.Group();
+      rightLegGroup.position.set(0.24, 0.95, 0);
+      const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.78, 0.44), pantsMat);
+      rightLeg.position.y = -0.39;
+      rightLeg.castShadow = true;
+      const rightShoe = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.2, 0.54), shoeMat);
+      rightShoe.position.set(0, -0.85, 0.04);
+      rightShoe.castShadow = true;
+      rightLegGroup.add(rightLeg, rightShoe);
+
+      // 2. TRONCO COM ROUPA DETALHADA (Textura na frente + jaqueta)
+      const frontTorsoMat = new THREE.MeshStandardMaterial({ map: createOutfitTorsoTexture(skin), roughness: 0.55 });
+      const torsoMats = [shirtMat, shirtMat, shirtMat, shirtMat, frontTorsoMat, shirtMat]; // +Z é a frente do boneco!
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.05, 0.5), torsoMats);
+      torso.position.y = 1.48;
+      torso.castShadow = true;
+
+      // Cinto
+      const belt = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.12, 0.53), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
+      belt.position.y = 0.98;
+
+      // 3. BRAÇOS ARTICULADOS (Manga da roupa + Mão)
+      const leftArmGroup = new THREE.Group();
+      leftArmGroup.position.set(-0.7, 1.92, 0);
+      const leftSleeve = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.55, 0.4), shirtMat);
+      leftSleeve.position.y = -0.25;
+      leftSleeve.castShadow = true;
+      const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.42, 0.38), skinMat);
+      leftHand.position.y = -0.72;
+      leftHand.castShadow = true;
+      leftArmGroup.add(leftSleeve, leftHand);
+
+      const rightArmGroup = new THREE.Group();
+      rightArmGroup.position.set(0.7, 1.92, 0);
+      const rightSleeve = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.55, 0.4), shirtMat);
+      rightSleeve.position.y = -0.25;
+      rightSleeve.castShadow = true;
+      const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.42, 0.38), skinMat);
+      rightHand.position.y = -0.72;
+      rightHand.castShadow = true;
+      rightArmGroup.add(rightSleeve, rightHand);
+
+      // 4. CABEÇA ESTILO ROBLOX COM ROSTO HUMANO NORMAL (+Z = FRENTE)
+      const headGroup = new THREE.Group();
+      headGroup.position.set(0, 2.38, 0);
+      const faceTex = createHumanFaceTexture(skin.skinTone, skin.eyeColor);
+      const faceMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.5 });
+      const headMats = [skinMat, skinMat, skinMat, skinMat, faceMat, skinMat];
+      const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.74, 0.74), headMats);
+      headMesh.castShadow = true;
+      headGroup.add(headMesh);
+
+      // Cabelo 3D Estilizado conforme a Skin
+      const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.22, 0.8), hairMat);
+      hairTop.position.set(0, 0.38, -0.02);
+      hairTop.castShadow = true;
+      const hairBack = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.62, 0.2), hairMat);
+      hairBack.position.set(0, 0.08, -0.34);
+      headGroup.add(hairTop, hairBack);
+
+      if (skin.hairStyle === 'ponytail') {
+        const pony = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.55, 0.28), hairMat);
+        pony.position.set(0, 0.05, -0.52);
+        pony.rotation.x = 0.25;
+        headGroup.add(pony);
+      } else if (skin.hairStyle === 'spiky') {
+        const spike1 = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.35, 5), hairMat);
+        spike1.position.set(-0.15, 0.55, 0.05);
+        const spike2 = spike1.clone();
+        spike2.position.set(0.15, 0.58, 0.02);
+        headGroup.add(spike1, spike2);
+      } else if (skin.hairStyle === 'bob') {
+        const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.52, 0.55), hairMat);
+        sideL.position.set(-0.4, 0.06, -0.1);
+        const sideR = sideL.clone();
+        sideR.position.x = 0.4;
+        headGroup.add(sideL, sideR);
+      }
+
+      // Acessórios exclusivos da Skin
+      if (skin.accessory === 'backpack') {
+        const bag = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.75, 0.32), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+        bag.position.set(0, 1.52, -0.38);
+        bag.castShadow = true;
+        playerGroup.add(bag);
+      } else if (skin.accessory === 'headphones') {
+        const band = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.1, 0.16), new THREE.MeshStandardMaterial({ color: 0x38bdf8 }));
+        band.position.y = 0.46;
+        const earL = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.12, 16), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
+        earL.rotation.z = Math.PI / 2;
+        earL.position.set(-0.42, 0.02, 0);
+        const earR = earL.clone();
+        earR.position.x = 0.42;
+        headGroup.add(band, earL, earR);
+      } else if (skin.accessory === 'glasses') {
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+        const glL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.05), frameMat);
+        glL.position.set(-0.18, 0.04, 0.39);
+        const glR = glL.clone();
+        glR.position.x = 0.18;
+        headGroup.add(glL, glR);
+      }
+
+      playerGroup.add(leftLegGroup, rightLegGroup, torso, belt, leftArmGroup, rightArmGroup, headGroup);
+      playerGroup.rotation.y = playerFacingAngle;
+      scene.add(playerGroup);
+
+      playerParts = { leftLegGroup, rightLegGroup, leftArmGroup, rightArmGroup, headGroup, rightHand };
+      updateHeldItemVisual();
+    }
+
+    // =========================================================================
+    // 8. MODELOS 3D DOS EQUIPAMENTOS DE REDE (FIÉIS AOS DIAGRAMAS)
+    // =========================================================================
+    function createDevice3DModel(type, isGhost = false) {
+      const group = new THREE.Group();
+      const opacity = isGhost ? 0.45 : 1.0;
+      const matOpts = { transparent: isGhost, opacity, roughness: 0.4, metalness: 0.2 };
+
+      const ciscoBlue = new THREE.MeshStandardMaterial({ color: 0x2b7a9b, ...matOpts });
+      const darkMetal = new THREE.MeshStandardMaterial({ color: 0x1e293b, ...matOpts });
+      const screenMat = new THREE.MeshStandardMaterial({
+        color: 0xbae6fd,
+        emissive: isGhost ? 0x000000 : 0x0284c7,
+        emissiveIntensity: 0.35,
+        ...matOpts
+      });
+
+      if (type === 'pc') {
+        // Base + Monitor + Teclado
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.18, 0.85), ciscoBlue);
+        base.position.y = 0.09;
+        const stand = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.22), darkMetal);
+        stand.position.set(0, 0.28, -0.05);
+        const monitor = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.85, 0.22), ciscoBlue);
+        monitor.position.set(0, 0.78, -0.05);
+        const screen = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.65, 0.05), screenMat);
+        screen.position.set(0, 0.78, 0.07);
+        const kbd = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.08, 0.35), darkMetal);
+        kbd.position.set(0, 0.05, 0.55);
+        group.add(base, stand, monitor, screen, kbd);
+      } else if (type === 'laptop') {
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.1, 0.8), ciscoBlue);
+        base.position.y = 0.05;
+        const lid = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.72, 0.08), ciscoBlue);
+        lid.position.set(0, 0.42, -0.36);
+        lid.rotation.x = -0.18;
+        const screen = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.58, 0.03), screenMat);
+        screen.position.set(0, 0.42, -0.31);
+        screen.rotation.x = -0.18;
+        group.add(base, lid, screen);
+      } else if (type === 'printer') {
+        const body = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.55, 0.9), ciscoBlue);
+        body.position.y = 0.28;
+        const topTray = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.14, 0.55), screenMat);
+        topTray.position.set(0, 0.6, -0.1);
+        const paper = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.04, 0.5), new THREE.MeshStandardMaterial({ color: 0xffffff, ...matOpts }));
+        paper.position.set(0, 0.35, 0.55);
+        paper.rotation.x = 0.25;
+        group.add(body, topTray, paper);
+      } else if (type === 'server') {
+        const tower = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.65, 1.05), ciscoBlue);
+        tower.position.y = 0.83;
+        const frontPanel = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.45, 0.06), darkMetal);
+        frontPanel.position.set(0, 0.83, 0.52);
+        const led = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.04), new THREE.MeshBasicMaterial({ color: 0x4ade80 }));
+        led.position.set(0, 1.35, 0.55);
+        group.add(tower, frontPanel, led);
+      } else if (type === 'smartphone') {
+        const phone = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.95, 0.12), ciscoBlue);
+        phone.position.set(0, 0.52, 0);
+        phone.rotation.x = -0.25;
+        const scr = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.75, 0.04), screenMat);
+        scr.position.set(0, 0.52, 0.06);
+        scr.rotation.x = -0.25;
+        const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.35), darkMetal);
+        ant.position.set(0.2, 1.05, -0.05);
+        group.add(phone, scr, ant);
+      } else if (type === 'tablet') {
+        const tab = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.72, 0.12), ciscoBlue);
+        tab.position.set(0, 0.42, 0);
+        tab.rotation.x = -0.35;
+        const scr = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.56, 0.04), screenMat);
+        scr.position.set(0, 0.42, 0.06);
+        scr.rotation.x = -0.35;
+        group.add(tab, scr);
+      } else if (type === 'appliance') {
+        // Cafeteira Smart do Diagrama Ponto a Ponto Bluetooth
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.25, 0.85), darkMetal);
+        frame.position.y = 0.63;
+        const carafe = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.52, 16), new THREE.MeshStandardMaterial({ color: 0x78350f, ...matOpts }));
+        carafe.position.set(0, 0.48, 0.12);
+        const topLid = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.25, 0.88), ciscoBlue);
+        topLid.position.y = 1.22;
+        group.add(frame, carafe, topLid);
+      } else if (type === 'switch') {
+        const sw = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.32, 0.9), ciscoBlue);
+        sw.position.y = 0.16;
+        const topArrow = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.04, 0.5), screenMat);
+        topArrow.position.y = 0.33;
+        group.add(sw, topArrow);
+      } else if (type === 'hub') {
+        const hub = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.85, 0.75), ciscoBlue);
+        hub.position.y = 0.43;
+        const ports = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.55, 0.05), screenMat);
+        ports.position.set(0, 0.45, 0.38);
+        group.add(hub, ports);
+      } else if (type === 'router') {
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.68, 0.35, 24), ciscoBlue);
+        body.position.y = 0.18;
+        const ant1 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.7), screenMat);
+        ant1.position.set(-0.42, 0.55, -0.2);
+        const ant2 = ant1.clone();
+        ant2.position.set(0.42, 0.55, -0.2);
+        group.add(body, ant1, ant2);
+      }
+
+      group.traverse(obj => {
+        if (obj.isMesh && !isGhost) {
+          obj.castShadow = true;
+          obj.receiveShadow = true;
+        }
+      });
+      return group;
+    }
+
+    function createLabelSprite(text, bgColor = '#0f172a') {
+      const c = document.createElement('canvas');
+      c.width = 320;
+      c.height = 72;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = bgColor;
+      ctx.beginPath();
+      ctx.roundRect(10, 10, 300, 52, 16);
+      ctx.fill();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 26px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 160, 37);
+
+      const tex = new THREE.CanvasTexture(c);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(2.3, 0.52, 1);
+      return sprite;
+    }
+
+    function getResolvedDeviceType(slotId) {
+      if (slotId === 1) return 'pc';
+      if (slotId === 2) return 'laptop';
+      if (slotId === 3) return 'printer';
+      if (slotId === 4) return 'server';
+      if (slotId === 5) return mobileSubtype;
+      if (slotId === 6) return nodeSubtype;
+      if (slotId === 7) return 'router';
+      return null;
+    }
+
+    function getDeviceDisplayName(type) {
+      const map = {
+        pc: 'PC-PT',
+        laptop: 'Laptop-PT',
+        printer: 'Printer-PT',
+        server: 'Server-PT',
+        smartphone: 'Smartphone-PT',
+        tablet: 'TabletPC-PT',
+        appliance: 'Cafeteira-IoT',
+        switch: 'Switch-PT',
+        hub: 'Hub-PT',
+        router: 'HomeRouter-AC'
+      };
+      return map[type] || type;
+    }
+
+    // =========================================================================
+    // 9. HOLOGRAMA DE POSICIONAMENTO E ITEM NA MÃO DO AVATAR
+    // =========================================================================
+    function buildPlacementGhost() {
+      if (placementGhost) scene.remove(placementGhost);
+      const devType = getResolvedDeviceType(activeSlot);
+      if (!devType) {
+        placementGhost = null;
+        return;
+      }
+      placementGhost = createDevice3DModel(devType, true);
+      placementGhost.visible = false;
+      scene.add(placementGhost);
+    }
+
+    function updateHeldItemVisual() {
+      if (!playerParts.rightHand) return;
+      if (heldItemMesh) {
+        playerParts.rightHand.remove(heldItemMesh);
+        heldItemMesh = null;
+      }
+      const devType = getResolvedDeviceType(activeSlot);
+      if (devType) {
+        heldItemMesh = createDevice3DModel(devType, false);
+        heldItemMesh.scale.set(0.38, 0.38, 0.38);
+        heldItemMesh.position.set(0, -0.25, 0.28);
+        playerParts.rightHand.add(heldItemMesh);
+      } else {
+        // Cabo ou Wireless na mão
+        const toolColor = activeSlot === 8 ? 0x22c55e : 0xa855f7;
+        heldItemMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.06, 0.06, 0.55, 12),
+          new THREE.MeshStandardMaterial({ color: toolColor, emissive: toolColor, emissiveIntensity: 0.4 })
+        );
+        heldItemMesh.rotation.x = Math.PI / 2;
+        heldItemMesh.position.set(0, -0.22, 0.25);
+        playerParts.rightHand.add(heldItemMesh);
+      }
+    }
+
+    // =========================================================================
+    // 10. POSICIONAMENTO DE DISPOSITIVOS E CRIAÇÃO DE CONEXÕES 3D
+    // =========================================================================
+    function placeDeviceAt(x, z) {
+      const devType = getResolvedDeviceType(activeSlot);
+      if (!devType) return;
+
+      // Snap suave ao grid de 1 unidade
+      const gx = Math.round(x);
+      const gz = Math.round(z);
+
+      // Evita sobrepor dispositivo no mesmo ponto exato
+      if (placedDevices.some(d => Math.hypot(d.position.x - gx, d.position.z - gz) < 1.1)) {
+        AudioFX.error();
+        return;
+      }
+
+      const countSame = placedDevices.filter(d => d.type === devType).length + 1;
+      const label = `${getDeviceDisplayName(devType)} #${countSame}`;
+      const id = 'dev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+
+      const mesh = createDevice3DModel(devType, false);
+      mesh.position.set(gx, 0, gz);
+      mesh.userData = { deviceId: id };
+
+      const sprite = createLabelSprite(label);
+      sprite.position.set(0, 1.95, 0);
+      mesh.add(sprite);
+
+      scene.add(mesh);
+      const devObj = { id, type: devType, label, position: { x: gx, y: 0, z: gz }, mesh };
+      placedDevices.push(devObj);
+      actionHistory.push({ kind: 'device', id });
+      AudioFX.place();
+    }
+
+    function handleDeviceClicked(deviceId) {
+      if (activeSlot !== 8 && activeSlot !== 9) {
+        // Se clicou num dispositivo com ferramenta de item selecionada, seleciona para remover se segurar Shift
+        if (keys['ShiftLeft'] || keys['ShiftRight']) {
+          removeDeviceById(deviceId);
+        }
+        return;
+      }
+
+      const linkType = activeSlot === 8 ? 'cable' : 'wireless';
+      if (!pendingLinkFromId) {
+        pendingLinkFromId = deviceId;
+        const dev = placedDevices.find(d => d.id === deviceId);
+        showConnectionStatus(`Conectando (${linkType === 'cable' ? 'CABO' : 'SEM FIO'}) a partir de ${dev.label}... Clique no destino!`);
+        AudioFX.select();
+      } else if (pendingLinkFromId === deviceId) {
+        cancelPendingConnection();
+      } else {
+        createConnection(pendingLinkFromId, deviceId, linkType);
+        cancelPendingConnection();
+      }
+    }
+
+    function createConnection(fromId, toId, type) {
+      // Impede duplicata entre os mesmos dois nós
+      const exists = placedLinks.some(l =>
+        (l.from === fromId && l.to === toId) || (l.from === toId && l.to === fromId)
+      );
+      if (exists) {
+        AudioFX.error();
+        return;
+      }
+
+      const d1 = placedDevices.find(d => d.id === fromId);
+      const d2 = placedDevices.find(d => d.id === toId);
+      if (!d1 || !d2) return;
+
+      const p1 = new THREE.Vector3(d1.position.x, 0.45, d1.position.z);
+      const p2 = new THREE.Vector3(d2.position.x, 0.45, d2.position.z);
+      const dist = p1.distanceTo(p2);
+      const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+
+      const linkGroup = new THREE.Group();
+      const packets = [];
+
+      if (type === 'cable') {
+        // Cabo sólido escuro com conectores verdes nas pontas (estilo Packet Tracer)
+        const cylGeo = new THREE.CylinderGeometry(0.065, 0.065, dist, 10);
+        const cylMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.4 });
+        const cableMesh = new THREE.Mesh(cylGeo, cylMat);
+        cableMesh.position.copy(mid);
+        cableMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p2.clone().sub(p1).normalize());
+        linkGroup.add(cableMesh);
+
+        // Triângulos/esferas verdes de link ativo nas extremidades
+        const portMat = new THREE.MeshBasicMaterial({ color: 0x22c55e });
+        const port1 = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 12), portMat);
+        port1.position.copy(p1).lerp(p2, 0.12);
+        const port2 = port1.clone();
+        port2.position.copy(p2).lerp(p1, 0.12);
+        linkGroup.add(port1, port2);
+      } else {
+        // Conexão Sem Fio / Bluetooth (segmentos pulsantes verdes/roxos)
+        const steps = Math.max(4, Math.floor(dist * 2.5));
+        const waveMat = new THREE.MeshBasicMaterial({ color: 0x4ade80 });
+        for (let i = 1; i < steps; i++) {
+          const t = i / steps;
+          const seg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 0.28), waveMat);
+          seg.position.lerpVectors(p1, p2, t);
+          seg.lookAt(p2);
+          linkGroup.add(seg);
+        }
+      }
+
+      // Pacote de dados animado trafegando na linha
+      const pkt = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.16, 0),
+        new THREE.MeshBasicMaterial({ color: type === 'cable' ? 0x38bdf8 : 0xc084fc })
+      );
+      pkt.position.copy(p1);
+      linkGroup.add(pkt);
+      packets.push({ mesh: pkt, p1, p2, progress: Math.random() });
+
+      scene.add(linkGroup);
+      const id = 'lnk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+      placedLinks.push({ id, from: fromId, to: toId, type, mesh: linkGroup, packets });
+      actionHistory.push({ kind: 'link', id });
+      AudioFX.connect();
+    }
+
+    function removeDeviceById(id) {
+      const idx = placedDevices.findIndex(d => d.id === id);
+      if (idx === -1) return;
+      scene.remove(placedDevices[idx].mesh);
+      placedDevices.splice(idx, 1);
+
+      // Remove links conectados a esse dispositivo
+      for (let i = placedLinks.length - 1; i >= 0; i--) {
+        if (placedLinks[i].from === id || placedLinks[i].to === id) {
+          scene.remove(placedLinks[i].mesh);
+          placedLinks.splice(i, 1);
+        }
+      }
+      AudioFX.remove();
+    }
+
+    function undoLastAction() {
+      cancelPendingConnection();
+      const last = actionHistory.pop();
+      if (!last) return;
+      if (last.kind === 'link') {
+        const idx = placedLinks.findIndex(l => l.id === last.id);
+        if (idx !== -1) {
+          scene.remove(placedLinks[idx].mesh);
+          placedLinks.splice(idx, 1);
+          AudioFX.remove();
+        }
+      } else if (last.kind === 'device') {
+        removeDeviceById(last.id);
+      }
+    }
+
+    function clearWorkspace() {
+      cancelPendingConnection();
+      placedDevices.forEach(d => scene.remove(d.mesh));
+      placedLinks.forEach(l => scene.remove(l.mesh));
+      placedDevices = [];
+      placedLinks = [];
+      actionHistory = [];
+      AudioFX.remove();
+    }
+
+    // =========================================================================
+    // 11. VALIDAÇÃO DA TOPOLOGIA + ALERTA DRAMÁTICO DE "ERRO!"
+    // =========================================================================
+    function validateCurrentTopology() {
+      const level = LEVELS[currentLevelIdx];
+      const result = level.validate(placedDevices, placedLinks);
+
+      if (!result.ok) {
+        triggerErrorFeedback(result.msg);
+      } else {
+        triggerSuccessFeedback(level);
+      }
+    }
+
+    function triggerErrorFeedback(reasonText) {
+      AudioFX.error();
+      screenShakeTimer = 0.55;
+      document.getElementById('error-reason').textContent = reasonText;
+      const overlay = document.getElementById('error-overlay');
+      const card = document.getElementById('error-card');
+      overlay.classList.remove('hidden');
+      card.classList.remove('animate-error-banner');
+      void card.offsetWidth; // força reflow da animação
+      card.classList.add('animate-error-banner');
+    }
+
+    function closeErrorOverlay() {
+      document.getElementById('error-overlay').classList.add('hidden');
+    }
+
+    function triggerSuccessFeedback(level) {
+      AudioFX.success();
+      score += 250;
+      document.getElementById('score-display').textContent = score;
+      document.getElementById('success-title').textContent = `${level.title} — Concluída!`;
+      document.getElementById('success-desc').textContent =
+        currentLevelIdx < LEVELS.length - 1
+          ? 'Excelente trabalho, técnico! Sua topologia está idêntica ao diagrama oficial.'
+          : 'Parabéns! Você dominou todas as 7 topologias de rede da NetBlox Academy!';
+      document.getElementById('next-level-btn').textContent =
+        currentLevelIdx < LEVELS.length - 1 ? 'Próxima Fase ➡️' : 'Reiniciar Academia 🔄';
+      document.getElementById('success-overlay').classList.remove('hidden');
+    }
+
+    function goToNextLevel() {
+      document.getElementById('success-overlay').classList.add('hidden');
+      const next = (currentLevelIdx + 1) % LEVELS.length;
+      loadLevel(next);
+    }
+
+    function loadLevel(idx) {
+      currentLevelIdx = idx;
+      const lvl = LEVELS[idx];
+      clearWorkspace();
+
+      if (lvl.presetSubtypes) {
+        mobileSubtype = lvl.presetSubtypes.mobile;
+        nodeSubtype = lvl.presetSubtypes.node;
+      }
+
+      document.getElementById('level-badge').textContent = `Fase ${lvl.id} / ${LEVELS.length}`;
+      document.getElementById('level-title').textContent = lvl.title;
+      document.getElementById('level-desc').textContent = lvl.description;
+
+      renderHotbar();
+      selectSlot(1);
+    }
+
+    // =========================================================================
+    // 12. UI DA HOTBAR ESTILO ROBLOX E MODAIS
+    // =========================================================================
+    function renderHotbar() {
+      const container = document.getElementById('roblox-hotbar');
+      container.innerHTML = '';
+
+      INVENTORY_ITEMS.forEach(item => {
+        let displayName = item.name;
+        let displayIcon = item.icon;
+
+        if (item.slot === 5) {
+          if (mobileSubtype === 'smartphone') { displayName = 'Smartphone'; displayIcon = '📱'; }
+          if (mobileSubtype === 'tablet')     { displayName = 'Tablet-PT';  displayIcon = '📟'; }
+          if (mobileSubtype === 'appliance')  { displayName = 'Cafeteira';  displayIcon = '☕'; }
+        } else if (item.slot === 6) {
+          if (nodeSubtype === 'switch') { displayName = 'Switch-PT'; displayIcon = '🔀'; }
+          if (nodeSubtype === 'hub')    { displayName = 'Hub-PT';    displayIcon = '🎛️'; }
+        }
+
+        const isActive = activeSlot === item.slot;
+        const btn = document.createElement('button');
+        btn.className = `relative flex flex-col items-center justify-center p-1.5 sm:p-2 rounded-xl border-2 transition-all duration-150 ${
+          isActive
+            ? 'slot-active text-white'
+            : 'border-slate-700/90 bg-slate-900/90 hover:bg-slate-800 text-slate-300'
+        }`;
+        btn.onclick = () => {
+          if (isActive && item.hasSubtypes) {
+            cycleSubtype(item.slot);
+          } else {
+            selectSlot(item.slot);
+          }
+        };
+
+        btn.innerHTML = `
+          <span class="absolute top-1 left-1.5 text-[10px] sm:text-xs font-extrabold text-slate-400">${item.slot}</span>
+          ${item.hasSubtypes ? `<span class="absolute top-1 right-1 text-[9px] px-1 rounded bg-sky-500/30 text-sky-300 font-bold">↻</span>` : ''}
+          <span class="text-lg sm:text-2xl my-0.5">${displayIcon}</span>
+          <span class="text-[9px] sm:text-[11px] font-bold truncate w-full text-center">${displayName}</span>
+        `;
+        container.appendChild(btn);
+      });
+    }
+
+    function cycleSubtype(slot) {
+      if (slot === 5) {
+        const order = ['smartphone', 'tablet', 'appliance'];
+        mobileSubtype = order[(order.indexOf(mobileSubtype) + 1) % order.length];
+      } else if (slot === 6) {
+        nodeSubtype = nodeSubtype === 'switch' ? 'hub' : 'switch';
+      }
+      AudioFX.select();
+      renderHotbar();
+      updateSelectedLabel();
+      buildPlacementGhost();
+      updateHeldItemVisual();
+    }
+
+    function selectSlot(slotNum) {
+      if (slotNum < 1 || slotNum > 9) return;
+      activeSlot = slotNum;
+      cancelPendingConnection();
+      AudioFX.select();
+      renderHotbar();
+      updateSelectedLabel();
+      buildPlacementGhost();
+      updateHeldItemVisual();
+    }
+
+    function updateSelectedLabel() {
+      const item = INVENTORY_ITEMS.find(i => i.slot === activeSlot);
+      let extra = '';
+      if (activeSlot === 5) {
+        extra = ` — [${mobileSubtype.toUpperCase()}] (Pressione 5 novamente para alternar Smartphone / Tablet / Cafeteira)`;
+      } else if (activeSlot === 6) {
+        extra = ` — [${nodeSubtype.toUpperCase()}] (Pressione 6 novamente para alternar Switch / Hub)`;
+      } else if (activeSlot === 8 || activeSlot === 9) {
+        extra = ' — Clique no 1º equipamento e depois no 2º equipamento';
+      }
+      document.getElementById('selected-item-label').textContent = `[${item.slot}] ${item.name}${extra}`;
+    }
+
+    function showConnectionStatus(text) {
+      const pill = document.getElementById('connection-status-pill');
+      document.getElementById('connection-status-text').textContent = text;
+      pill.classList.remove('hidden');
+    }
+
+    function cancelPendingConnection() {
+      pendingLinkFromId = null;
+      document.getElementById('connection-status-pill').classList.add('hidden');
+    }
+
+    // Modais: Skins, Diagrama e Fases
+    function openSkinModal() {
+      const grid = document.getElementById('skin-grid');
+      grid.innerHTML = '';
+      CHARACTER_SKINS.forEach((skin, idx) => {
+        const selected = idx === currentSkinIndex;
+        const shirtHex = '#' + skin.shirtColor.toString(16).padStart(6, '0');
+        const pantsHex = '#' + skin.pantsColor.toString(16).padStart(6, '0');
+        const card = document.createElement('button');
+        card.className = `p-4 rounded-2xl border-2 text-left transition flex items-center gap-4 ${
+          selected ? 'border-sky-400 bg-sky-950/50' : 'border-slate-700 bg-slate-800/70 hover:bg-slate-800'
+        }`;
+        card.onclick = () => {
+          currentSkinIndex = idx;
+          buildPlayerAvatar(skin);
+          document.getElementById('current-skin-avatar').style.backgroundColor = shirtHex;
+          AudioFX.success();
+          closeSkinModal();
+        };
+        card.innerHTML = `
+          <div class="w-14 h-14 rounded-2xl flex flex-col overflow-hidden border-2 border-white/20 shrink-0 shadow-lg">
+            <div style="background:#${skin.skinTone.toString(16).padStart(6,'0')}" class="h-5 w-full flex items-center justify-center text-[10px] text-slate-900 font-bold">••</div>
+            <div style="background:${shirtHex}" class="h-5 w-full"></div>
+            <div style="background:${pantsHex}" class="h-4 w-full"></div>
+          </div>
+          <div>
+            <div class="font-roblox font-bold text-base text-white">${skin.name} ${selected ? '✓' : ''}</div>
+            <div class="text-xs text-sky-300 font-medium">${skin.role}</div>
+            <div class="text-[11px] text-slate-400 mt-1">Uniforme completo + Rosto expresso 3D</div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+      document.getElementById('skin-modal').classList.remove('hidden');
+    }
+    function closeSkinModal() { document.getElementById('skin-modal').classList.add('hidden'); }
+
+    function openDiagramModal() {
+      const lvl = LEVELS[currentLevelIdx];
+      document.getElementById('diagram-modal-title').textContent = `Diagrama Oficial: ${lvl.title}`;
+      document.getElementById('diagram-svg-container').innerHTML = lvl.svgDiagram;
+      const list = document.getElementById('diagram-checklist');
+      list.innerHTML = `<div class="font-bold text-sky-300 mb-1">📋 Requisitos Obrigatórios para Validar:</div>` +
+        lvl.checklist.map(item => `<div>• ${item}</div>`).join('');
+      document.getElementById('diagram-modal').classList.remove('hidden');
+    }
+    function closeDiagramModal() { document.getElementById('diagram-modal').classList.add('hidden'); }
+
+    function openLevelSelectModal() {
+      const list = document.getElementById('levels-list');
+      list.innerHTML = '';
+      LEVELS.forEach((lvl, idx) => {
+        const active = idx === currentLevelIdx;
+        const btn = document.createElement('button');
+        btn.className = `p-3.5 rounded-2xl border-2 text-left transition ${
+          active ? 'border-emerald-400 bg-emerald-950/40' : 'border-slate-700 bg-slate-800/70 hover:bg-slate-800'
+        }`;
+        btn.onclick = () => {
+          loadLevel(idx);
+          closeLevelSelectModal();
+        };
+        btn.innerHTML = `
+          <div class="text-xs font-bold text-sky-400">FASE ${lvl.id}</div>
+          <div class="font-roblox font-bold text-white text-base">${lvl.title}</div>
+          <div class="text-xs text-slate-400 mt-1 line-clamp-2">${lvl.description}</div>
+        `;
+        list.appendChild(btn);
+      });
+      document.getElementById('levels-modal').classList.remove('hidden');
+    }
+    function closeLevelSelectModal() { document.getElementById('levels-modal').classList.add('hidden'); }
+
+    // =========================================================================
+    // 13. CONTROLES DE TECLADO, MOUSE E TOUCH
+    // =========================================================================
+    function setupInputs() {
+      window.addEventListener('keydown', e => {
+        keys[e.code] = true;
+
+        // Teclas numéricas 1 a 9 da hotbar Roblox
+        if (e.key >= '1' && e.key <= '9') {
+          const num = parseInt(e.key, 10);
+          if (activeSlot === num && (num === 5 || num === 6)) {
+            cycleSubtype(num);
+          } else {
+            selectSlot(num);
+          }
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+          e.preventDefault();
+          undoLastAction();
+        }
+        if (e.key === 'Escape') {
+          cancelPendingConnection();
+          closeErrorOverlay();
+          closeSkinModal();
+          closeDiagramModal();
+          closeLevelSelectModal();
+        }
+      });
+
+      window.addEventListener('keyup', e => {
+        keys[e.code] = false;
+      });
+
+      const canvas = document.getElementById('game-canvas');
+      canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+      canvas.addEventListener('mousedown', e => {
+        if (e.button === 2) {
+          isRightDragging = true;
+          lastMouseX = e.clientX;
+          lastMouseY = e.clientY;
+        } else if (e.button === 0) {
+          handleCanvasClick(e.clientX, e.clientY);
+        }
+      });
+
+      window.addEventListener('mouseup', () => {
+        isRightDragging = false;
+      });
+
+      window.addEventListener('mousemove', e => {
+        if (isRightDragging) {
+          const dx = e.clientX - lastMouseX;
+          const dy = e.clientY - lastMouseY;
+          lastMouseX = e.clientX;
+          lastMouseY = e.clientY;
+          cameraYaw -= dx * 0.007;
+          cameraPitch = Math.max(0.18, Math.min(1.15, cameraPitch + dy * 0.006));
+        }
+        updateHoverGhost(e.clientX, e.clientY);
+      });
+
+      canvas.addEventListener('wheel', e => {
+        cameraDistance = Math.max(6, Math.min(22, cameraDistance + e.deltaY * 0.01));
+      }, { passive: true });
+
+      // Controles Touch D-Pad Mobile
+      const bindTouchBtn = (id, dir) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('touchstart', e => { e.preventDefault(); touchMove[dir] = true; });
+        el.addEventListener('touchend', e => { e.preventDefault(); touchMove[dir] = false; });
+      };
+      bindTouchBtn('btn-up', 'up');
+      bindTouchBtn('btn-down', 'down');
+      bindTouchBtn('btn-left', 'left');
+      bindTouchBtn('btn-right', 'right');
+    }
+
+    function updateHoverGhost(clientX, clientY) {
+      if (!placementGhost) return;
+      mouse.x = (clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const hits = raycaster.intersectObject(floorPlane);
+      if (hits.length > 0) {
+        const pt = hits[0].point;
+        placementGhost.visible = true;
+        placementGhost.position.set(Math.round(pt.x), 0.02, Math.round(pt.z));
+      } else {
+        placementGhost.visible = false;
+      }
+    }
+
+    function handleCanvasClick(clientX, clientY) {
+      mouse.x = (clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      // 1. Verifica se clicou em algum equipamento já colocado
+      const deviceMeshes = placedDevices.map(d => d.mesh);
+      const devHits = raycaster.intersectObjects(deviceMeshes, true);
+      if (devHits.length > 0) {
+        let obj = devHits[0].object;
+        while (obj && !obj.userData.deviceId) obj = obj.parent;
+        if (obj && obj.userData.deviceId) {
+          handleDeviceClicked(obj.userData.deviceId);
+          return;
+        }
+      }
+
+      // 2. Caso contrário, posiciona novo item no piso se estiver com equipamento selecionado (Slots 1-7)
+      if (activeSlot >= 1 && activeSlot <= 7) {
+        const floorHits = raycaster.intersectObject(floorPlane);
+        if (floorHits.length > 0) {
+          const pt = floorHits[0].point;
+          placeDeviceAt(pt.x, pt.z);
+        }
+      }
+    }
+
+    // =========================================================================
+    // 14. LOOP DE ANIMAÇÃO (ANDAR DE FRENTE + PACOTES DE DADOS + CÂMERA)
+    // =========================================================================
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+
+      updatePlayerMovement(dt);
+      updateDataPackets(dt);
+      updateCamera(dt);
+
+      renderer.render(scene, camera);
+    }
+
+    function updatePlayerMovement(dt) {
+      let moveForward = 0;
+      let moveRight = 0;
+
+      if (keys['KeyW'] || keys['ArrowUp'] || touchMove.up) moveForward += 1;
+      if (keys['KeyS'] || keys['ArrowDown'] || touchMove.down) moveForward -= 1;
+      if (keys['KeyD'] || keys['ArrowRight'] || touchMove.right) moveRight += 1;
+      if (keys['KeyA'] || keys['ArrowLeft'] || touchMove.left) moveRight -= 1;
+
+      const isMoving = moveForward !== 0 || moveRight !== 0;
+
+      if (isMoving) {
+        // Direção relativa à câmera para andar sempre de frente para o destino
+        const forwardVec = new THREE.Vector3(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw));
+        const rightVec = new THREE.Vector3(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw));
+
+        const moveDir = new THREE.Vector3()
+          .addScaledVector(forwardVec, moveForward)
+          .addScaledVector(rightVec, moveRight)
+          .normalize();
+
+        const speed = 7.2;
+        playerPos.addScaledVector(moveDir, speed * dt);
+        playerPos.x = Math.max(-13.5, Math.min(13.5, playerPos.x));
+        playerPos.z = Math.max(-11.5, Math.min(11.5, playerPos.z));
+
+        // O rosto e o tronco (+Z) giram suavemente e ficam DE FRENTE para a direção da caminhada!
+        const targetAngle = Math.atan2(moveDir.x, moveDir.z);
+        let diff = targetAngle - playerFacingAngle;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        playerFacingAngle += diff * Math.min(1, dt * 14);
+
+        // Animação fluida de caminhada (braços e pernas balançando)
+        walkCycle += dt * 11;
+        const swing = Math.sin(walkCycle) * 0.65;
+        playerParts.leftLegGroup.rotation.x = swing;
+        playerParts.rightLegGroup.rotation.x = -swing;
+        playerParts.leftArmGroup.rotation.x = -swing * 0.85;
+        // Braço direito levanta levemente se estiver segurando equipamento
+        playerParts.rightArmGroup.rotation.x = heldItemMesh ? -0.45 + swing * 0.2 : swing * 0.85;
+        playerGroup.position.y = Math.abs(Math.cos(walkCycle)) * 0.08;
+      } else {
+        // Retorno suave à postura parada
+        playerParts.leftLegGroup.rotation.x *= 0.82;
+        playerParts.rightLegGroup.rotation.x *= 0.82;
+        playerParts.leftArmGroup.rotation.x *= 0.82;
+        playerParts.rightArmGroup.rotation.x = heldItemMesh ? -0.45 : playerParts.rightArmGroup.rotation.x * 0.82;
+        playerGroup.position.y *= 0.82;
+      }
+
+      playerGroup.position.x = playerPos.x;
+      playerGroup.position.z = playerPos.z;
+      playerGroup.rotation.y = playerFacingAngle;
+    }
+
+    function updateDataPackets(dt) {
+      placedLinks.forEach(link => {
+        link.packets.forEach(pkt => {
+          pkt.progress += dt * 0.65;
+          if (pkt.progress > 1) pkt.progress = 0;
+          pkt.mesh.position.lerpVectors(pkt.p1, pkt.p2, pkt.progress);
+          pkt.mesh.rotation.y += dt * 4;
+        });
+      });
+    }
+
+    function updateCamera(dt) {
+      const target = new THREE.Vector3(playerPos.x, 1.8, playerPos.z);
+      const offsetX = Math.sin(cameraYaw) * Math.cos(cameraPitch) * cameraDistance;
+      const offsetY = Math.sin(cameraPitch) * cameraDistance;
+      const offsetZ = Math.cos(cameraYaw) * Math.cos(cameraPitch) * cameraDistance;
+
+      camera.position.lerp(new THREE.Vector3(target.x + offsetX, target.y + offsetY, target.z + offsetZ), 0.14);
+
+      if (screenShakeTimer > 0) {
+        screenShakeTimer -= dt;
+        camera.position.x += (Math.random() - 0.5) * 0.45;
+        camera.position.y += (Math.random() - 0.5) * 0.45;
+      }
+
+      camera.lookAt(target);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    window.onload = init3D;
+  </script>
+</body>
+</html>
